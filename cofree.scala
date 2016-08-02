@@ -9,14 +9,27 @@ import doobie.imports._
 
 Ok so here are my goals:
 1. Help you gain an intuition about some simple recursive types. Which will help you survive the
-   next talk, about Matryoshka, which explores these ideas in a much more general way.
+   next talk, about Matryoshka, which explores these ideas in a much more general way. For this talk
+   I'm going to generalize a little bit but for the most part I'm going to keep things concrete
+   enough that you can still get your hands on them.
 2. Help you gain some confidence pushing on your types to see what happens. Beginners in particular
    because things like higher-kinded types and equational reasoning just aren't ideas that you have
-   in your toolkit when your're starting out with functional programming.
-3. Show you how boring doobie is. Doobie is a pure functional database library that I work on, and
-   we're going to do some database programming without ever really thinking about database 
+   in your toolkit when your're starting out with functional programming. So I'll have a few 
+   opportunities to do that.
+3. Show you how boring doobie is. Which is good. Doobie is a pure functional database library that
+   I work on, and we're going to do some database programming without ever really thinking about database 
    programming. Wr're going to treat database programs like any other data type and at some point
    you'll probably forget that we're doing database programming.
+
+
+===
+
+- introduce the problem
+- derive fix and cofree
+- show some other examples:
+  - Fix[λ[a => (A, F[a])]] ~ Cofree[F, A]
+  - Fix[λ[a => A \/ F[a]]] ~ Free[F, A]
+
 
  */
 
