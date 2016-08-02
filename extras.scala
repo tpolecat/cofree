@@ -7,13 +7,13 @@ import doobie.imports._
 
 trait Extras {
 
-  // Top-down fold+unfold
-  def extendPM[M[_]: Monad, F[_]: Traverse, A, B]
-    (cfa: Cofree[F, A])(b: B)
-    (f: (B, Cofree[F, A]) => M[B]): M[Cofree[F, B]] =
-      f(b, cfa).flatMap { b => 
-        cfa.tail.traverseU(extendPM(_)(b)(f)).map(Cofree(b, _))
-      }
+  // // Top-down fold+unfold
+  // def extendPM[M[_]: Monad, F[_]: Traverse, A, B]
+  //   (cfa: Cofree[F, A])(b: B)
+  //   (f: (B, Cofree[F, A]) => M[B]): M[Cofree[F, B]] =
+  //     f(b, cfa).flatMap { b => 
+  //       cfa.tail.traverseU(extendPM(_)(b)(f)).map(Cofree(b, _))
+  //     }
 
   // /** Extend, with a state variable that propagates with the branching structure. */
   // def extendP[F[_]: Functor, A, B](cfa: Cofree[F, A])(z : B)(f: (B, Cofree[F, A]) => B): Cofree[F, B] = {
@@ -59,8 +59,8 @@ trait Extras {
   // def closure[F[_]: Functor: Foldable, A](cf: Cofree[F, A]): List[(A, A, Int)] =
   //   cf.extend(desc(_)).foldMap(_.toList)
 
-  def unfoldCM[M[_]: Monad, F[_]: Traverse, A](a: A)(f: A => M[F[A]]): M[Cofree[F, A]] =
-    f(a).flatMap(_.traverse(unfoldCM(_)(f)).map(Cofree(a, _)))
+  // def unfoldCM[M[_]: Monad, F[_]: Traverse, A](a: A)(f: A => M[F[A]]): M[Cofree[F, A]] =
+  //   f(a).flatMap(_.traverse(unfoldCM(_)(f)).map(Cofree(a, _)))
 
   /* Parser that produces the current offset in the input. */
   val pos: Parser[Int] = {
