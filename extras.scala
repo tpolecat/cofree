@@ -4,8 +4,11 @@ import doobie.imports._
 // import matryoshka._
 // import matryoshka.Recursive.ops._
 
+object Extras extends Extras
 
 trait Extras {
+
+  case class Fix[F[_]](unfix: F[Fix[F]])
 
   // // Top-down fold+unfold
   // def extendPM[M[_]: Monad, F[_]: Traverse, A, B]
@@ -39,6 +42,15 @@ trait Extras {
       _ <- HC.delay(print(" " * indent))
       _ <- HC.delay(println(fa.head + " :< " + fa.tail))
       _ <- fa.tail.traverse(draw(_, indent + 1))
+    } yield ()
+
+
+  /** Dump a Cofree as a tree ... unprincipled, sorry. */
+  def drawFix[F[_]: Traverse](fa: Fix[F], indent: Int = 0): ConnectionIO[Unit] = 
+    for {
+      _ <- HC.delay(print(" " * indent))
+      _ <- HC.delay(println(fa.unfix))
+      _ <- fa.unfix.traverse(drawFix(_, indent + 1))
     } yield ()
 
   // /** Pair each annotation with its distance from the root. */

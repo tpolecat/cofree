@@ -35,7 +35,6 @@ Ok so here are my goals:
 
 object cofree extends Extras with SafeApp {
 
-  case class Fix[F[_]](unfix: F[Fix[F]])
 
   val data =
     """|Simeon Denis Poisson, École Polytechnique, 1800
@@ -77,7 +76,7 @@ object cofree extends Extras with SafeApp {
 
     // traversable functors:
     // you have map like normal functors, but also .sequence which says
-    // F[G[A]] => G[F[A]]
+    // F[G[A]] => G[F[A]] for traversable functor F and applicative functor G
     // and map(f).sequence is .traverse(f)
     // also fa.sequence = fa.map(identity).sequence = fa.traverse(identity)
     // so this is a nice identity that you can find by equational reasoning; it must be true if the

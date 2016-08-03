@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Title</title>
+    <meta charset="utf-8">
+    <style>
+      @import url(https://fonts.googleapis.com/css?family=Yanone+Kaffeesatz);
+      @import url(https://fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic);
+      @import url(https://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700,400italic);
+
+      body { font-family: 'Droid Serif'; }
+      h1, h2, h3 {
+        font-family: 'Yanone Kaffeesatz';
+        font-weight: normal;
+      }
+      .remark-code, .remark-inline-code { font-family: 'Ubuntu Mono'; }
+    </style>
+  </head>
+  <body>
+    <textarea id="source">
+
+```tut:invisible
+import scalaz._, Scalaz._
+import atto._, Atto._
+import doobie.imports._
+
+val pos: Parser[Int] = {
+  import Trampoline._
+  import Parser._
+  import Parser.Internal._
+  new Parser[Int] {
+    override def toString = "pos"
+    def apply[R](st0: State, kf: Failure[R], ks: Success[Int,R]): TResult[R] =
+      suspend(ks(st0,st0.pos))
+  }
+}
+
+
+
+```
+
+class: center, middle
+
+# Working Title
+Rob Norris • Gemini Observatory
+
+---
+
+# Recursive Data
+
+```tut:silent
+case class Prof(
+  name: String,
+  students: List[Prof]
+)
+```
+---
+
+# Recursive Data
+
+```tut:silent
+case class Prof(
+  id : Int @@ Prof,
+  name: String,
+  students: List[Prof]
+)
+```
+
+---
+
+# Recursive Data
+
+```tut:silent
+case class Prof(
+  id : Int,
+  name: String,
+  students: List[Prof]
+)
+```
+
+---
+
+# Recursive Data
+
+```tut:silent
+case class Prof(
+  id : Option[Int],
+  name: String,
+  students: List[Prof]
+)
+```
+
+---
+
+# Recursive Data
+
+```tut:silent
+case class Prof(
+  name: String,
+  students: List[Prof]
+)
+
+type IdProf = (Int, Prof)
+```
+
+---
+
+# Recursive Data
+
+```tut:silent
+case class Prof(
+  name: String,
+  students: List[(Int, Prof)]
+)
+
+type IdProf = (Int, Prof)
+```
+
+---
+
+# Recursive Data
+
+```tut:silent
+case class ProfF[A](
+  name: String,
+  students: List[A]
+)
+```
+
+```tut:silent:fail
+type Prof   = ProfF[ProfF]
+type IdProf = (Int, ProfF[(Int, ProfF)])
+```
+
+---
+
+# Recursive Data
+
+```tut:silent
+case class ProfF[A](
+  name: String,
+  students: List[A]
+)
+```
+
+```tut:silent:fail
+type Prof   = ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[
+type IdProf = (Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, 
+```
+
+---
+
+# Recursive Data
+
+```tut:silent
+case class ProfF[A](
+  name: String,
+  students: List[A]
+)
+```
+
+```tut:silent:fail
+type Prof   = ProfF[Prof]
+type IdProf = (Int, ProfF[IdProf])
+```
+
+---
+
+# Recursive Data
+
+```tut:silent
+case class ProfF[A](
+  name: String,
+  students: List[A]
+)
+```
+
+```tut:silent
+case class Prof(value: ProfF[Prof])
+case class IdProf(id: Int, value: ProfF[IdProf])
+```
+
+---
+
+# Recursive Data
+
+```tut:silent
+case class ProfF[A](
+  name: String,
+  students: List[A]
+)
+```
+
+```tut:silent
+case class Prof[F[_]](value: F[Prof[F]])
+case class IdProf[F[_]](id: Int, value: F[IdProf[F]])
+```
+
+---
+
+# Recursive Data
+
+```tut:silent
+case class ProfF[A](
+  name: String,
+  students: List[A]
+)
+```
+
+```tut:silent
+case class Prof[F[_]](value: F[Prof[F]])
+case class IdProf[F[_], A](id: A, value: F[IdProf[F, A]])
+```
+
+---
+
+# Recursive Data
+
+```tut:silent
+case class ProfF[A](
+  name: String,
+  students: List[A]
+)
+```
+
+```tut:silent
+case class Fix[F[_]](value: F[Fix[F]])
+case class Cofree[F[_], A](id: A, value: F[Cofree[F, A]])
+```
+
+---
+
+# Recursive Data
+
+```tut:silent
+case class ProfF[A](
+  name: String,
+  students: List[A]
+)
+```
+
+```tut:silent
+case class Fix[F[_]](unfix: F[Fix[F]])
+case class Cofree[F[_], A](head: A, tail: F[Cofree[F, A]])
+```
+
+```tut:silent
+type Prof   = Fix[ProfF]
+type IdProf = Cofree[ProfF, Int]
+```
+
+---
+
+# Recursive Data
+
+```tut:silent
+case class Prof(name: String, students: List[Prof])
+
+
+val p: Prof = 
+  Prof("Hilbert", List(
+    Prof("Ackermann", Nil),
+    Prof("Curry", Nil),
+    Prof("Weyl", List(
+      Prof("Mac Lane", List(
+        Prof("Howard", Nil),
+        Prof("Awodey", Nil)
+      ))
+    ))
+ ))
+```
+
+
+
+---
+
+# Recursive Data
+
+```tut:silent
+case class ProfF[A](name: String, students: List[A])
+type Prof = Fix[ProfF]
+
+val p: Prof = 
+  Fix(ProfF("Hilbert", List(
+    Fix(ProfF("Ackermann", Nil)),
+    Fix(ProfF("Curry", Nil)),
+    Fix(ProfF("Weyl", List(
+      Fix(ProfF("Mac Lane", List(
+        Fix(ProfF("Howard", Nil)),
+        Fix(ProfF("Awodey", Nil))
+      ))))
+    )))
+  ))
+```
+
+
+---
+
+# Recursive Data
+
+```tut:silent
+case class ProfF[A](name: String, students: List[A])
+type IdProf = Cofree[ProfF, Int]
+
+val p: IdProf = 
+  Cofree(1, ProfF("Hilbert", List(
+    Cofree(2, ProfF("Ackermann", Nil)),
+    Cofree(3, ProfF("Curry", Nil)),
+    Cofree(4, ProfF("Weyl", List(
+      Cofree(5, ProfF("Mac Lane", List(
+        Cofree(6, ProfF("Howard", Nil)),
+        Cofree(7, ProfF("Awodey", Nil))
+      ))))
+    )))
+  ))
+```
+
+---
+
+class: center, middle
+
+# Intermezzo
+
+---
+
+# Parse Positions
+
+```tut:silent
+case class ProfF[A](name: String, year: Int, students: List[A])
+
+val data =
+  """|Simeon Denis Poisson, 1800
+     |  Gustav Peter Lejeune Dirichlet, 1827
+     |    Rudolf Otto Sigismund Lipschitz, 1853
+     |      C. Felix (Christian) Klein, 1868
+     |        William Edward Story, 1875
+     |          Solomon Lefschetz, 1911
+     |            Albert William Tucker, 1932
+     |              Marvin Lee Minsky, 1954
+     |                Gerald Jay Sussman, 1973
+     |                  Guy Lewis Steele, 1980
+     |                    Philip Lee Wadler, 1984
+     |        C. L. Ferdinand (Carl Louis) Lindemann, 1873
+     |          David Hilbert, 1885
+     |            Wilhelm Ackermann, 1925
+     |            Haskell Curry, 1930
+     |            Hermann Weyl, 1908
+     |              Saunders Mac Lane, 1934
+     |                Steven Awodey, 1997
+     |                William Howard, 1956
+     |""".stripMargin
+
+
+```
+
+---
+
+# Parse Positions
+
+```tut:invisible
+case class ProfF[A](name: String, year: Int, students: List[A]) {
+  override def toString = s"ProfF($name, $year, «${students.length}»)"
+}
+```
+
+```tut:silent
+def person(n: Int): Parser[Fix[ProfF]] =
+  for {
+    _    <- manyN(n, char(' '))     // skip 'n' spaces
+    name <- stringOf(notChar(','))  // read up to a comma
+    _    <- token(char(','))        // skip comma and following space
+    year <- int                     // read an int
+    _    <- char('\n')              // skip a newline
+    ss   <- many(person(n + 2))     // recursively read more at indent + 2
+  } yield Fix(ProfF(name, year, ss))
+```
+
+
+---
+
+# Parse Positions
+
+```tut:silent
+def person(n: Int): Parser[Fix[ProfF]] =
+  for {
+    _    <- manyN(n, char(' '))     // skip 'n' spaces
+    name <- stringOf(notChar(','))  // read up to a comma
+    _    <- token(char(','))        // skip comma and following space
+    year <- int                     // read an int
+    _    <- char('\n')              // skip a newline
+    ss   <- many(person(n + 2))     // recursively read more at indent + 2
+  } yield Fix(ProfF(name, year, ss))
+```
+
+```tut
+person(0).parseOnly(data).option
+```
+
+---
+
+# Parse Positions
+
+```tut:invisible
+def drawFix(fa: Fix[ProfF]): Unit = {
+  def go(fa: Fix[ProfF], indent: Int = 0): Unit = { 
+    print(" " * indent)
+    println(fa.unfix)
+    fa.unfix.students.foreach(go(_, indent + 1))
+  }
+  go(fa, 0)
+}
+```
+
+```tut
+person(0).parseOnly(data).option.foreach(drawFix)
+```
+
+
+---
+
+# Parse Positions
+
+```tut:silent
+def person(n: Int): Parser[Fix[ProfF]] =
+  for {
+
+    _    <- manyN(n, char(' '))     // skip 'n' spaces
+    name <- stringOf(notChar(','))  // read up to a comma
+    _    <- token(char(','))        // skip comma and following space
+    year <- int                     // read an int
+    _    <- char('\n')              // skip a newline
+    ss   <- many(person(n + 2))     // recursively read more at indent + 2
+
+  } yield Fix(ProfF(name, year, ss))
+```
+
+---
+
+# Parse Positions
+
+```tut:silent
+def person(n: Int): Parser[Cofree[ProfF, (Int, Int)]] =
+  for {
+    p0   <- pos
+    _    <- manyN(n, char(' '))     // skip 'n' spaces
+    name <- stringOf(notChar(','))  // read up to a comma
+    _    <- token(char(','))        // skip comma and following space
+    year <- int                     // read an int
+    _    <- char('\n')              // skip a newline
+    ss   <- many(person(n + 2))     // recursively read more at indent + 2
+    p1   <- pos
+  } yield Cofree((p0, p1), ProfF(name, year, ss))
+```
+
+---
+
+# Parse Positions
+
+```tut:silent
+def person(n: Int): Parser[Cofree[ProfF, (Int, Int)]] =
+  for {
+    p0   <- pos
+    _    <- manyN(n, char(' '))     // skip 'n' spaces
+    name <- stringOf(notChar(','))  // read up to a comma
+    _    <- token(char(','))        // skip comma and following space
+    year <- int                     // read an int
+    _    <- char('\n')              // skip a newline
+    ss   <- many(person(n + 2))     // recursively read more at indent + 2
+    p1   <- pos
+  } yield Cofree((p0, p1), ProfF(name, year, ss))
+```
+
+```tut
+person(0).parseOnly(data).option
+```
+
+---
+
+# Parse Positions
+
+```tut:invisible
+def drawCofree[A](fa: Cofree[ProfF, A]): Unit = {
+  def go(fa: Cofree[ProfF, A], indent: Int = 0): Unit = { 
+    print(" " * indent)
+    println(fa.head + " :< " + fa.tail)
+    fa.tail.students.foreach(go(_, indent + 1))
+  }
+  go(fa, 0)
+}
+```
+
+```tut
+person(0).parseOnly(data).option.foreach(drawCofree)
+```
+
+---
+
+class: center, middle
+
+# Games
+
+---
+
+# So Why the F?
+
+```tut:silent
+case class ProfF[A](name: String, students: List[A])
+```
+
+`ProfF` is a functor. This means we can map over it. 
+
+```tut:silent
+implicit val PersonFunctor: Functor[ProfF] =
+  new Functor[ProfF] {
+    def map[A, B](fa: ProfF[A])(f: A => B): ProfF[B] =
+      fa.copy(students = fa.students.map(f))
+  }
+```
+
+Thus.
+
+```tut
+val ps = ProfF("Bob", List("foo", "bar"))
+ps.map(s => s.length)
+```
+
+---
+
+# But wait, there's more!
+
+```tut:silent
+case class ProfF[A](name: String, students: List[A])
+```
+
+`ProfF` is a *traversable* functor. This means we can sequence it.
+
+```tut:silent
+implicit val PersonTraverse: Traverse[ProfF] =
+  new Traverse[ProfF] {
+    def traverseImpl[G[_]: Applicative, A, B](fa: ProfF[A])(f: A => G[B]): G[ProfF[B]] =
+      fa.students.traverse(f).map(ss => fa.copy(students = ss))
+  }
+```
+
+Thus.
+
+```tut
+val p = ProfF("Bob", List(Option(1), Option(2)))
+p.sequence
+```
+
+---
+
+# Ok what about database programming?
+
+```tut:silent
+def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
+  sql"""
+    INSERT INTO prof (parent, name)
+    VALUES ($op, ${p.name})
+  """.update.withUniqueGeneratedKeys("id")
+```
+
+---
+
+# Ok what about database programming?
+
+```tut:silent
+def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
+  sql"""
+    INSERT INTO prof (parent, name)
+    VALUES ($op, ${p.name})
+  """.update.withUniqueGeneratedKeys("id")
+
+def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]] =
+  for {
+    h <- insertNode(op, fp.unfix)       // ConnectionIO[Int] 
+    t <- fp.unfix                       // ProfF[Fix[ProfF]] 
+           .map(insertTree(_, Some(h))) // ProfF[ConnectionIO[Cofree[ProfF, Int]]]
+           .sequence                    // ConnectionIO[ProfF[Cofree[ProfF, Int]]]
+  } yield Cofree(h, t) 
+```
+
+---
+
+# Ok what about database programming?
+
+```tut:silent
+def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
+  sql"""
+    INSERT INTO prof (parent, name)
+    VALUES ($op, ${p.name})
+  """.update.withUniqueGeneratedKeys("id")
+
+def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]] =
+  for {
+    h <- insertNode(op, fp.unfix)
+    t <- fp.unfix
+           .traverse(insertTree(_, Some(h))) // same as map + sequence
+  } yield Cofree(h, t) 
+```
+
+---
+
+# Ok what about database programming?
+
+```tut:silent
+def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
+  sql"""
+    INSERT INTO prof (parent, name)
+    VALUES ($op, ${p.name})
+  """.update.withUniqueGeneratedKeys("id")
+
+def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]] =
+  for {
+    h <- insertNode(op, fp.unfix)
+    t <- fp.unfix.traverse(insertTree(_, Some(h)))
+  } yield Cofree(h, t) 
+```
+
+---
+
+```tut:silent
+def readNode(id: Int): ConnectionIO[ProfF[Int]] =
+  for {
+    name     <- sql"SELECT name FROM prof WHERE id = $id".query[String].unique
+    students <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
+  } yield ProfF(name, students)
+```
+---
+
+```tut:silent
+def readNode(id: Int): ConnectionIO[ProfF[Int]] =
+  for {
+    name     <- sql"SELECT name FROM prof WHERE id = $id".query[String].unique
+    students <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
+  } yield ProfF(name, students)
+
+def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
+  readNode(id).flatMap { pi =>
+    pi.map(readTree)      // ProfF[ConnectionIO[Cofree[ProfF, Int]]]
+      .sequence           // ConnectionIO[ProfF[Cofree[ProfF, Int]]]
+      .map(Cofree(id, _)) // ConnectionIO[Cofree[ProfF, Int]]
+  }
+```
+
+---
+
+```tut:silent
+def readNode(id: Int): ConnectionIO[ProfF[Int]] =
+  for {
+    name     <- sql"SELECT name FROM prof WHERE id = $id".query[String].unique
+    students <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
+  } yield ProfF(name, students)
+
+def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
+  readNode(id).flatMap { pi =>
+    pi.traverse(readTree)
+      .map(Cofree(id, _))
+  }
+```
+
+---
+
+```tut:silent
+def readNode(id: Int): ConnectionIO[ProfF[Int]] =
+  for {
+    name     <- sql"SELECT name FROM prof WHERE id = $id".query[String].unique
+    students <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
+  } yield ProfF(name, students)
+
+def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
+  readNode(id).flatMap(_.traverse(readTree).map(Cofree(id, _)))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ </textarea>
+    <script src="https://gnab.github.io/remark/downloads/remark-latest.min.js">
+    </script>
+    <script>
+      var slideshow = remark.create();
+    </script>
+  </body>
+</html>

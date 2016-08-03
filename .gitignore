@@ -27,3 +27,8 @@ bin/
 # ENSIME
 .ensime
 .ensime_cache/
+
+
+
+# This project
+tut-out/
