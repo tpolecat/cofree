@@ -34,9 +34,6 @@ val pos: Parser[Int] = {
       suspend(ks(st0,st0.pos))
   }
 }
-
-
-
 ```
 
 class: center, middle
@@ -551,7 +548,38 @@ p.sequence
 
 ---
 
-# Ok what about database programming?
+# (small digression)
+
+Because "map and then sequence" is so common, we provide `traverse` which does them in one step.
+
+```scala
+fa.map(f).sequence <~> fa.traverse(f) // (1) definition of traverse
+```
+
+And we can find another identity by equational reasoning.
+
+```scala
+
+fa          <~> fa.map(identity)          // (2) the functor law
+
+fa.sequence <~> fa.map(identity).sequence // by (2) above
+
+fa.sequence <~> fa.traverse(identity)     // by (1) above
+```
+
+So when you're working with traversable functors it's nice to know both of those substitutions.
+
+
+---
+
+class: center, middle
+
+# Can we do some SQL now?
+
+
+---
+
+# Insert a Tree
 
 ```tut:silent
 def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
@@ -563,7 +591,7 @@ def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
 
 ---
 
-# Ok what about database programming?
+# Insert a Tree
 
 ```tut:silent
 def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
@@ -583,7 +611,7 @@ def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]
 
 ---
 
-# Ok what about database programming?
+# Insert a Tree
 
 ```tut:silent
 def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
@@ -602,7 +630,7 @@ def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]
 
 ---
 
-# Ok what about database programming?
+# Insert a Tree
 
 ```tut:silent
 def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
@@ -620,6 +648,8 @@ def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]
 
 ---
 
+# And now read it back.
+
 ```tut:silent
 def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   for {
@@ -628,6 +658,8 @@ def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   } yield ProfF(name, students)
 ```
 ---
+
+# And now read it back.
 
 ```tut:silent
 def readNode(id: Int): ConnectionIO[ProfF[Int]] =
@@ -646,6 +678,8 @@ def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
 
 ---
 
+# And now read it back.
+
 ```tut:silent
 def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   for {
@@ -662,6 +696,8 @@ def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
 
 ---
 
+# And now read it back.
+
 ```tut:silent
 def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   for {
@@ -675,8 +711,23 @@ def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
 
 
 
+---
 
+# Review
 
+- We learned about some recursive types.
+- We used them to do something useful.
+- We did some equational reasoning.
+- We were not frightened.
+
+---
+
+class: center, middle
+
+# Thanks!
+Code and slides at `tpolecat/cofree` on GitHub
+
+## Questions?
 
 
 
