@@ -20,7 +20,7 @@
     <textarea id="source">
 
 ```tut:invisible
-import scalaz._, Scalaz._
+import scalaz._, Scalaz._, scalaz.effect.IO
 import atto._, Atto._
 import doobie.imports._
 
@@ -38,8 +38,17 @@ val pos: Parser[Int] = {
 
 class: center, middle
 
-# Working Title
-Rob Norris • Gemini Observatory
+# Fun & Games with Fix, Cofree, and Doobie!
+Rob Norris • `@tpolecat` • Gemini Observatory
+
+---
+
+# Goals
+
+1. Gain an intuition about some simple recursive types.
+2. Gain some confidence pushing on your types to see what happens.
+3. Learn how boring doobie is.
+4. Do not panic.
 
 ---
 
@@ -48,6 +57,7 @@ Rob Norris • Gemini Observatory
 ```tut:silent
 case class Prof(
   name: String,
+  year: Int,
   students: List[Prof]
 )
 ```
@@ -59,6 +69,7 @@ case class Prof(
 case class Prof(
   id : Int @@ Prof,
   name: String,
+  year: Int,
   students: List[Prof]
 )
 ```
@@ -71,6 +82,7 @@ case class Prof(
 case class Prof(
   id : Int,
   name: String,
+  year: Int,
   students: List[Prof]
 )
 ```
@@ -83,6 +95,7 @@ case class Prof(
 case class Prof(
   id : Option[Int],
   name: String,
+  year: Int,
   students: List[Prof]
 )
 ```
@@ -94,6 +107,7 @@ case class Prof(
 ```tut:silent
 case class Prof(
   name: String,
+  year: Int,
   students: List[Prof]
 )
 
@@ -107,6 +121,7 @@ type IdProf = (Int, Prof)
 ```tut:silent
 case class Prof(
   name: String,
+  year: Int,
   students: List[(Int, Prof)]
 )
 
@@ -120,6 +135,7 @@ type IdProf = (Int, Prof)
 ```tut:silent
 case class ProfF[A](
   name: String,
+  year: Int,
   students: List[A]
 )
 ```
@@ -136,6 +152,7 @@ type IdProf = (Int, ProfF[(Int, ProfF)])
 ```tut:silent
 case class ProfF[A](
   name: String,
+  year: Int,
   students: List[A]
 )
 ```
@@ -152,6 +169,7 @@ type IdProf = (Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, 
 ```tut:silent
 case class ProfF[A](
   name: String,
+  year: Int,
   students: List[A]
 )
 ```
@@ -168,6 +186,7 @@ type IdProf = (Int, ProfF[IdProf])
 ```tut:silent
 case class ProfF[A](
   name: String,
+  year: Int,
   students: List[A]
 )
 ```
@@ -184,6 +203,7 @@ case class IdProf(id: Int, value: ProfF[IdProf])
 ```tut:silent
 case class ProfF[A](
   name: String,
+  year: Int,
   students: List[A]
 )
 ```
@@ -200,6 +220,7 @@ case class IdProf[F[_]](id: Int, value: F[IdProf[F]])
 ```tut:silent
 case class ProfF[A](
   name: String,
+  year: Int,
   students: List[A]
 )
 ```
@@ -216,6 +237,7 @@ case class IdProf[F[_], A](id: A, value: F[IdProf[F, A]])
 ```tut:silent
 case class ProfF[A](
   name: String,
+  year: Int,
   students: List[A]
 )
 ```
@@ -232,6 +254,7 @@ case class Cofree[F[_], A](id: A, value: F[Cofree[F, A]])
 ```tut:silent
 case class ProfF[A](
   name: String,
+  year: Int,
   students: List[A]
 )
 ```
@@ -251,17 +274,17 @@ type IdProf = Cofree[ProfF, Int]
 # Recursive Data
 
 ```tut:silent
-case class Prof(name: String, students: List[Prof])
+case class Prof(name: String, year: Int, students: List[Prof])
 
 
 val p: Prof = 
-  Prof("Hilbert", List(
-    Prof("Ackermann", Nil),
-    Prof("Curry", Nil),
-    Prof("Weyl", List(
-      Prof("Mac Lane", List(
-        Prof("Howard", Nil),
-        Prof("Awodey", Nil)
+  Prof("Hilbert", 1885, List(
+    Prof("Ackermann", 1925, Nil),
+    Prof("Curry", 1930, Nil),
+    Prof("Weyl", 1908, List(
+      Prof("Mac Lane", 1934, List(
+        Prof("Howard", 1956, Nil),
+        Prof("Awodey", 1997, Nil)
       ))
     ))
  ))
@@ -274,17 +297,17 @@ val p: Prof =
 # Recursive Data
 
 ```tut:silent
-case class ProfF[A](name: String, students: List[A])
+case class ProfF[A](name: String, year: Int, students: List[A])
 type Prof = Fix[ProfF]
 
 val p: Prof = 
-  Fix(ProfF("Hilbert", List(
-    Fix(ProfF("Ackermann", Nil)),
-    Fix(ProfF("Curry", Nil)),
-    Fix(ProfF("Weyl", List(
-      Fix(ProfF("Mac Lane", List(
-        Fix(ProfF("Howard", Nil)),
-        Fix(ProfF("Awodey", Nil))
+  Fix(ProfF("Hilbert", 1885, List(
+    Fix(ProfF("Ackermann", 1925, Nil)),
+    Fix(ProfF("Curry", 1930,Nil)),
+    Fix(ProfF("Weyl", 1908, List(
+      Fix(ProfF("Mac Lane", 1934, List(
+        Fix(ProfF("Howard", 1956, Nil)),
+        Fix(ProfF("Awodey", 1997, Nil))
       ))))
     )))
   ))
@@ -296,17 +319,17 @@ val p: Prof =
 # Recursive Data
 
 ```tut:silent
-case class ProfF[A](name: String, students: List[A])
+case class ProfF[A](name: String, year: Int, students: List[A])
 type IdProf = Cofree[ProfF, Int]
 
 val p: IdProf = 
-  Cofree(1, ProfF("Hilbert", List(
-    Cofree(2, ProfF("Ackermann", Nil)),
-    Cofree(3, ProfF("Curry", Nil)),
-    Cofree(4, ProfF("Weyl", List(
-      Cofree(5, ProfF("Mac Lane", List(
-        Cofree(6, ProfF("Howard", Nil)),
-        Cofree(7, ProfF("Awodey", Nil))
+  Cofree(1, ProfF("Hilbert", 1885, List(
+    Cofree(2, ProfF("Ackermann", 1925, Nil)),
+    Cofree(3, ProfF("Curry", 1930,Nil)),
+    Cofree(4, ProfF("Weyl", 1908, List(
+      Cofree(5, ProfF("Mac Lane", 1934, List(
+        Cofree(6, ProfF("Howard", 1956, Nil)),
+        Cofree(7, ProfF("Awodey", 1997, Nil))
       ))))
     )))
   ))
@@ -361,14 +384,14 @@ case class ProfF[A](name: String, year: Int, students: List[A]) {
 ```
 
 ```tut:silent
-def person(n: Int): Parser[Fix[ProfF]] =
+def prof(n: Int): Parser[Fix[ProfF]] =
   for {
     _    <- manyN(n, char(' '))     // skip 'n' spaces
     name <- stringOf(notChar(','))  // read up to a comma
     _    <- token(char(','))        // skip comma and following space
     year <- int                     // read an int
     _    <- char('\n')              // skip a newline
-    ss   <- many(person(n + 2))     // recursively read more at indent + 2
+    ss   <- many(prof(n + 2))     // recursively read more at indent + 2
   } yield Fix(ProfF(name, year, ss))
 ```
 
@@ -378,19 +401,19 @@ def person(n: Int): Parser[Fix[ProfF]] =
 # Parse Positions
 
 ```tut:silent
-def person(n: Int): Parser[Fix[ProfF]] =
+def prof(n: Int): Parser[Fix[ProfF]] =
   for {
     _    <- manyN(n, char(' '))     // skip 'n' spaces
     name <- stringOf(notChar(','))  // read up to a comma
     _    <- token(char(','))        // skip comma and following space
     year <- int                     // read an int
     _    <- char('\n')              // skip a newline
-    ss   <- many(person(n + 2))     // recursively read more at indent + 2
+    ss   <- many(prof(n + 2))     // recursively read more at indent + 2
   } yield Fix(ProfF(name, year, ss))
 ```
 
 ```tut
-person(0).parseOnly(data).option
+prof(0).parseOnly(data).option
 ```
 
 ---
@@ -409,7 +432,7 @@ def drawFix(fa: Fix[ProfF]): Unit = {
 ```
 
 ```tut
-person(0).parseOnly(data).option.foreach(drawFix)
+prof(0).parseOnly(data).option.foreach(drawFix)
 ```
 
 
@@ -418,7 +441,7 @@ person(0).parseOnly(data).option.foreach(drawFix)
 # Parse Positions
 
 ```tut:silent
-def person(n: Int): Parser[Fix[ProfF]] =
+def prof(n: Int): Parser[Fix[ProfF]] =
   for {
 
     _    <- manyN(n, char(' '))     // skip 'n' spaces
@@ -426,7 +449,7 @@ def person(n: Int): Parser[Fix[ProfF]] =
     _    <- token(char(','))        // skip comma and following space
     year <- int                     // read an int
     _    <- char('\n')              // skip a newline
-    ss   <- many(person(n + 2))     // recursively read more at indent + 2
+    ss   <- many(prof(n + 2))     // recursively read more at indent + 2
 
   } yield Fix(ProfF(name, year, ss))
 ```
@@ -436,7 +459,7 @@ def person(n: Int): Parser[Fix[ProfF]] =
 # Parse Positions
 
 ```tut:silent
-def person(n: Int): Parser[Cofree[ProfF, (Int, Int)]] =
+def posProf(n: Int): Parser[Cofree[ProfF, (Int, Int)]] =
   for {
     p0   <- pos
     _    <- manyN(n, char(' '))     // skip 'n' spaces
@@ -444,7 +467,7 @@ def person(n: Int): Parser[Cofree[ProfF, (Int, Int)]] =
     _    <- token(char(','))        // skip comma and following space
     year <- int                     // read an int
     _    <- char('\n')              // skip a newline
-    ss   <- many(person(n + 2))     // recursively read more at indent + 2
+    ss   <- many(posProf(n + 2))     // recursively read more at indent + 2
     p1   <- pos
   } yield Cofree((p0, p1), ProfF(name, year, ss))
 ```
@@ -454,7 +477,7 @@ def person(n: Int): Parser[Cofree[ProfF, (Int, Int)]] =
 # Parse Positions
 
 ```tut:silent
-def person(n: Int): Parser[Cofree[ProfF, (Int, Int)]] =
+def posProf(n: Int): Parser[Cofree[ProfF, (Int, Int)]] =
   for {
     p0   <- pos
     _    <- manyN(n, char(' '))     // skip 'n' spaces
@@ -462,13 +485,13 @@ def person(n: Int): Parser[Cofree[ProfF, (Int, Int)]] =
     _    <- token(char(','))        // skip comma and following space
     year <- int                     // read an int
     _    <- char('\n')              // skip a newline
-    ss   <- many(person(n + 2))     // recursively read more at indent + 2
+    ss   <- many(posProf(n + 2))     // recursively read more at indent + 2
     p1   <- pos
   } yield Cofree((p0, p1), ProfF(name, year, ss))
 ```
 
 ```tut
-person(0).parseOnly(data).option
+posProf(0).parseOnly(data).option
 ```
 
 ---
@@ -487,7 +510,7 @@ def drawCofree[A](fa: Cofree[ProfF, A]): Unit = {
 ```
 
 ```tut
-person(0).parseOnly(data).option.foreach(drawCofree)
+posProf(0).parseOnly(data).option.foreach(drawCofree)
 ```
 
 ---
@@ -501,7 +524,7 @@ class: center, middle
 # So Why the F?
 
 ```tut:silent
-case class ProfF[A](name: String, students: List[A])
+case class ProfF[A](name: String, year: Int, students: List[A])
 ```
 
 `ProfF` is a functor. This means we can map over it. 
@@ -517,7 +540,7 @@ implicit val PersonFunctor: Functor[ProfF] =
 Thus.
 
 ```tut
-val ps = ProfF("Bob", List("foo", "bar"))
+val ps = ProfF("Bob", 1976, List("foo", "bar"))
 ps.map(s => s.length)
 ```
 
@@ -526,7 +549,7 @@ ps.map(s => s.length)
 # But wait, there's more!
 
 ```tut:silent
-case class ProfF[A](name: String, students: List[A])
+case class ProfF[A](name: String, year: Int, students: List[A])
 ```
 
 `ProfF` is a *traversable* functor. This means we can sequence it.
@@ -542,7 +565,7 @@ implicit val PersonTraverse: Traverse[ProfF] =
 Thus.
 
 ```tut
-val p = ProfF("Bob", List(Option(1), Option(2)))
+val p = ProfF("Bob", 1975, List(Option(1), Option(2)))
 p.sequence
 ```
 
@@ -576,6 +599,34 @@ class: center, middle
 
 # Can we do some SQL now?
 
+---
+
+# Get your doobie on
+
+```tut:silent
+// a transactor abstracts over connection pools and io-effect types
+val xa = DriverManagerTransactor[IO]("org.h2.Driver", "jdbc:h2:mem:test;DB_CLOSE_DELAY=-1", "sa", "")
+
+// a program to create the schema
+val create: ConnectionIO[Int] =
+  sql"""
+    CREATE TABLE prof (
+      id     INTEGER IDENTITY,
+      parent INTEGER     NULL,
+      name   VARCHAR NOT NULL,
+      year   INTEGER NOT NULL,
+      FOREIGN KEY(parent) REFERENCES prof(id)        
+    );
+  """.update.run
+```
+
+Let's init the database.
+
+```tut
+create.transact(xa).unsafePerformIO
+sql"select id from prof".query[Int].list.transact(xa).unsafePerformIO
+```
+
 
 ---
 
@@ -584,8 +635,8 @@ class: center, middle
 ```tut:silent
 def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
   sql"""
-    INSERT INTO prof (parent, name)
-    VALUES ($op, ${p.name})
+    INSERT INTO prof (parent, name, year)
+    VALUES ($op, ${p.name}, ${p.year})
   """.update.withUniqueGeneratedKeys("id")
 ```
 
@@ -596,8 +647,8 @@ def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
 ```tut:silent
 def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
   sql"""
-    INSERT INTO prof (parent, name)
-    VALUES ($op, ${p.name})
+    INSERT INTO prof (parent, name, year)
+    VALUES ($op, ${p.name}, ${p.year})
   """.update.withUniqueGeneratedKeys("id")
 
 def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]] =
@@ -616,8 +667,8 @@ def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]
 ```tut:silent
 def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
   sql"""
-    INSERT INTO prof (parent, name)
-    VALUES ($op, ${p.name})
+    INSERT INTO prof (parent, name, year)
+    VALUES ($op, ${p.name}, ${p.year})
   """.update.withUniqueGeneratedKeys("id")
 
 def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]] =
@@ -632,11 +683,23 @@ def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]
 
 # Insert a Tree
 
+```tut:invisible
+// redefine due to shadowing
+case class ProfF[A](name: String, year: Int, students: List[A]) {
+  override def toString = s"ProfF($name, $year, «${students.length}»)"
+}
+implicit val PersonTraverse: Traverse[ProfF] =
+  new Traverse[ProfF] {
+    def traverseImpl[G[_]: Applicative, A, B](fa: ProfF[A])(f: A => G[B]): G[ProfF[B]] =
+      fa.students.traverse(f).map(ss => fa.copy(students = ss))
+  }
+```
+
 ```tut:silent
 def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
   sql"""
-    INSERT INTO prof (parent, name)
-    VALUES ($op, ${p.name})
+    INSERT INTO prof (parent, name, year)
+    VALUES ($op, ${p.name}, ${p.year})
   """.update.withUniqueGeneratedKeys("id")
 
 def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]] =
@@ -648,15 +711,43 @@ def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]
 
 ---
 
-# And now read it back.
+# Insert a Tree
 
-```tut:silent
-def readNode(id: Int): ConnectionIO[ProfF[Int]] =
+```tut:invisible
+// redefine due to shadowing
+
+def prof(n: Int): Parser[Fix[ProfF]] =
   for {
-    name     <- sql"SELECT name FROM prof WHERE id = $id".query[String].unique
-    students <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
-  } yield ProfF(name, students)
+    _    <- manyN(n, char(' '))   
+    name <- stringOf(notChar(','))
+    _    <- token(char(','))      
+    year <- int                   
+    _    <- char('\n')            
+    ss   <- many(prof(n + 2))     
+  } yield Fix(ProfF(name, year, ss))
+
+def ioDrawCofree[F[_]: Traverse, A](fa: Cofree[F, A], indent: Int = 0): IO[Unit] = 
+  for {
+    _ <- IO(print(" " * indent))
+    _ <- IO(println(fa.head + " :< " + fa.tail))
+    _ <- fa.tail.traverse(ioDrawCofree(_, indent + 1))
+  } yield ()
 ```
+
+```tut
+val p = prof(0).parseOnly(data).option.get // yolo
+val io = insertTree(p, None).transact(xa).flatMap(c => ioDrawCofree(c))
+io.unsafePerformIO
+```
+
+---
+
+# Insert a Tree
+
+```tut
+io.unsafePerformIO
+```
+
 ---
 
 # And now read it back.
@@ -664,9 +755,21 @@ def readNode(id: Int): ConnectionIO[ProfF[Int]] =
 ```tut:silent
 def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   for {
-    name     <- sql"SELECT name FROM prof WHERE id = $id".query[String].unique
+    data     <- sql"SELECT name, year FROM prof WHERE id = $id".query[(String, Int)].unique
     students <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
-  } yield ProfF(name, students)
+  } yield ProfF(data._1, data._2, students)
+```
+---
+
+
+# And now read it back.
+
+```tut:silent
+def readNode(id: Int): ConnectionIO[ProfF[Int]] =
+  for {
+    data     <- sql"SELECT name, year FROM prof WHERE id = $id".query[(String, Int)].unique
+    students <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
+  } yield ProfF(data._1, data._2, students)
 
 def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
   readNode(id).flatMap { pi =>
@@ -683,9 +786,9 @@ def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
 ```tut:silent
 def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   for {
-    name     <- sql"SELECT name FROM prof WHERE id = $id".query[String].unique
+    data     <- sql"SELECT name, year FROM prof WHERE id = $id".query[(String, Int)].unique
     students <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
-  } yield ProfF(name, students)
+  } yield ProfF(data._1, data._2, students)
 
 def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
   readNode(id).flatMap { pi =>
@@ -701,14 +804,106 @@ def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
 ```tut:silent
 def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   for {
-    name     <- sql"SELECT name FROM prof WHERE id = $id".query[String].unique
+    data     <- sql"SELECT name, year FROM prof WHERE id = $id".query[(String, Int)].unique
     students <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
-  } yield ProfF(name, students)
+  } yield ProfF(data._1, data._2, students)
 
 def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
   readNode(id).flatMap(_.traverse(readTree).map(Cofree(id, _)))
 ```
 
+
+---
+
+# (another digression)
+
+```tut:silent
+// our original method for reading a tree
+def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
+  readNode(id).flatMap(_.traverse(readTree).map(Cofree(id, _)))
+```
+
+
+---
+
+# (another digression)
+
+```tut:silent
+// factor out the function we're calling
+def readTree(id: Int)(f: Int => ConnectionIO[ProfF[Int]]): ConnectionIO[Cofree[ProfF, Int]] =
+  f(id).flatMap(_.traverse(readTree(_)(f)).map(Cofree(id, _)))
+```
+
+
+---
+
+# (another digression)
+
+```tut:silent
+// factor out the monad
+def readTree[M[_]: Monad](id: Int)(f: Int => M[ProfF[Int]]): M[Cofree[ProfF, Int]] =
+  f(id).flatMap(_.traverse(readTree(_)(f)).map(Cofree(id, _)))
+```
+
+
+---
+
+# (another digression)
+
+```tut:silent
+// factor out the traversable functor
+def readTree[M[_]: Monad, F[_]: Traverse](id: Int)(f: Int => M[F[Int]]): M[Cofree[F, Int]] =
+  f(id).flatMap(_.traverse(readTree(_)(f)).map(Cofree(id, _)))
+```
+
+
+---
+
+# (another digression)
+
+```tut:silent
+// factor out the Int
+def readTree[M[_]: Monad, F[_]: Traverse, A](a: A)(f: A => M[F[A]]): M[Cofree[F, A]] =
+  f(a).flatMap(_.traverse(readTree(_)(f)).map(Cofree(a, _)))
+```
+
+
+---
+
+# (another digression)
+
+```tut:silent
+// we now have a generic monadic unfold into cofree
+def unfoldCM[M[_]: Monad, F[_]: Traverse, A](a: A)(f: A => M[F[A]]): M[Cofree[F, A]] =
+  f(a).flatMap(_.traverse(unfoldCM(_)(f)).map(Cofree(a, _)))
+```
+
+
+---
+
+# (another digression)
+
+```tut:silent
+// we now have a generic monadic unfold into cofree
+def unfoldCM[M[_]: Monad, F[_]: Traverse, A](a: A)(f: A => M[F[A]]): M[Cofree[F, A]] =
+  f(a).flatMap(_.traverse(unfoldCM(_)(f)).map(Cofree(a, _)))
+
+// and we can define readTree in terms of it
+// we're using a totally generic corecursive unfold to do database programming, which is kind of cool
+def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
+  unfoldCM(id)(readNode)
+```
+
+---
+
+# Do it work?
+
+Let's read Hilbert's sub-tree (id = 32).
+
+```tut
+val io = readTree(32).transact(xa).flatMap(c => ioDrawCofree(c))
+io.unsafePerformIO
+```
 
 
 ---
