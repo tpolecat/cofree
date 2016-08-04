@@ -14,11 +14,12 @@ scalacOptions ++= Seq(
 )
 
 libraryDependencies ++= Seq(
-  "org.scalaz"   %% "scalaz-core"       % "7.1.1",
-  "org.scalaz"   %% "scalaz-effect"     % "7.1.1",
-  "org.tpolecat" %% "doobie-core"       % "0.2.3",
-  "org.tpolecat" %% "doobie-contrib-h2" % "0.2.3",
-  "org.tpolecat" %% "atto-core"         % "0.4.2"
+  "org.scalaz"   %% "scalaz-core"               % "7.1.1",
+  "org.scalaz"   %% "scalaz-effect"             % "7.1.1",
+  "org.tpolecat" %% "doobie-core"               % "0.2.4",
+  "org.tpolecat" %% "doobie-contrib-h2"         % "0.2.4",
+  "org.tpolecat" %% "doobie-contrib-postgresql" % "0.2.4",
+  "org.tpolecat" %% "atto-core"                 % "0.4.2"
 )
 
 addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.7.1")

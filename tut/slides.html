@@ -41,14 +41,29 @@ class: center, middle
 # Fun & Games with Fix, Cofree, and Doobie!
 Rob Norris • `@tpolecat` • Gemini Observatory
 
+???
+
+- I'm Rob, I'm from Portland, first time in Montréal
+- For my day job I write software for big telescopes, but I also work on some open-source projects in support of typeful, pure functional programming in Scala. That's what I'm interested in.
+- So today I want to talk about some odds and ends that I think are interesting, and we'll see if you find them interesting to.
+
 ---
 
 # Goals
 
 1. Gain an intuition about some simple recursive types.
-2. Gain some confidence pushing on your types to see what happens.
+2. Gain some confidence pushing on code to see what happens.
 3. Learn how boring doobie is.
 4. Do not panic.
+
+???
+
+1. --- that's the main point of the talk. These types seem to be pretty well known in the Haskell community but not so much among Scala programmers, and they're interesting and worth knowing about.
+2. --- so, this is something I mention from time to time when I give talks and people ask me to say more about it, so I'll try to do that as well.
+3. --- Ok, so this is ostensibly a talk about database programming with doobie, which is a library I work on, but really it's a sketch of some things we can do with these interesting types and the tools we have as functional programmers. The database stuff ends up being really easy so it's kind of incidental.
+4. --- Recursion is always mind-blowing at first. Everybody struggles with recursive functions and recursive data types, and today we're going to talk about recursion at the type level, which may be new to a lot of you. So remain calm, this can be hard to grasp. So I'm going to try to approach it very gradually. If it ends up being too slow for you, I apologize; if it's too fast I also apologize. But please stop me if you have questions.
+
+Ok so let's look at a recursive data type.
 
 ---
 
@@ -64,7 +79,29 @@ case class Prof(
 )
 ```
 
-Natural SQL representation.
+<img align=right src="prof.png"/>
+
+
+???
+
+- ...
+- So the problem I want to talk about is how to store this in a relational database. So how do I save this thing to a database and read it back?
+
+---
+
+# Recursive Data
+
+A recursive data type for professors and their Ph.D. students.
+
+```tut:silent
+case class Prof(
+  name: String,
+  year: Int,
+  students: List[Prof]
+)
+```
+
+Natural SQL representation:
 
 <img align=right src="prof.png"/>
 
@@ -77,6 +114,12 @@ CREATE TABLE prof (
   FOREIGN KEY(parent) REFERENCES prof(id)        
 )
 ```
+
+???
+
+- Here's how you normally want to do it. You have the child refer to its parent, so the relationship is inverted.
+- But before we get to that we need to talk about how we're going to represent the id on the Scala side.
+- Ok so here's one possibility.
 
 ---
 
@@ -107,6 +150,11 @@ CREATE TABLE prof (
 )
 ```
 
+???
+
+- So we would probably use a tagged type or something to store this, but just for simplicity I'm going to use a plan `Int`.
+- Also going to get rid of the table definition for now.
+
 ---
 
 # Recursive Data
@@ -122,19 +170,11 @@ case class Prof(
 )
 ```
 
-Natural SQL representation.
-
 <img align=right src="prof.png"/>
 
-```sql
-CREATE TABLE prof (
-  id     INTEGER IDENTITY,
-  parent INTEGER     NULL,
-  name   VARCHAR NOT NULL,
-  year   INTEGER NOT NULL,
-  FOREIGN KEY(parent) REFERENCES prof(id)        
-)
-```
+???
+
+- Ok so what's wrong with this representatoin for IDs? (new objects)
 
 ---
 
@@ -151,19 +191,19 @@ case class Prof(
 )
 ```
 
-Natural SQL representation.
-
 <img align=right src="prof.png"/>
 
-```sql
-CREATE TABLE prof (
-  id     INTEGER IDENTITY,
-  parent INTEGER     NULL,
-  name   VARCHAR NOT NULL,
-  year   INTEGER NOT NULL,
-  FOREIGN KEY(parent) REFERENCES prof(id)        
-)
-```
+???
+
+Ok is this any better? Maybe a little bit, but I think it's irritating because you tend to have three cases:
+
+1. it's new, and we know it's new
+2. it's from the database so we know it has an id
+3. we don't care about ids
+
+And this encoding is irritating in all three cases, so I don't like it.
+
+So a way to make the id less invasive is to externalize it.
 
 ---
 
@@ -181,19 +221,13 @@ case class Prof(
 type IdProf = (Int, Prof)
 ```
 
-Natural SQL representation.
-
 <img align=right src="prof.png"/>
 
-```sql
-CREATE TABLE prof (
-  id     INTEGER IDENTITY,
-  parent INTEGER     NULL,
-  name   VARCHAR NOT NULL,
-  year   INTEGER NOT NULL,
-  FOREIGN KEY(parent) REFERENCES prof(id)        
-)
-```
+???
+
+- so ...
+- but the problem now is that the children don't have ids, right? So we have to do this:
+
 
 ---
 
@@ -211,19 +245,13 @@ case class Prof(
 type IdProf = (Int, Prof)
 ```
 
-Natural SQL representation.
-
 <img align=right src="prof.png"/>
 
-```sql
-CREATE TABLE prof (
-  id     INTEGER IDENTITY,
-  parent INTEGER     NULL,
-  name   VARCHAR NOT NULL,
-  year   INTEGER NOT NULL,
-  FOREIGN KEY(parent) REFERENCES prof(id)        
-)
-```
+???
+
+- ... Which defeats the purpose of externalizing the ids … the whole point was to not have to talk about them in the model.
+
+So let's try something else. Let's parameterize it on the child type.
 
 ---
 
@@ -244,19 +272,13 @@ type Prof   = ProfF[ProfF]
 type IdProf = (Int, ProfF[(Int, ProfF)])
 ```
 
-Natural SQL representation.
-
 <img align=right src="prof.png"/>
 
-```sql
-CREATE TABLE prof (
-  id     INTEGER IDENTITY,
-  parent INTEGER     NULL,
-  name   VARCHAR NOT NULL,
-  year   INTEGER NOT NULL,
-  FOREIGN KEY(parent) REFERENCES prof(id)        
-)
-```
+???
+
+- ok so the data type isn't recursive anymore
+- And I'm going to call this `ProfF` just to distinguish it from our old `Prof`, so now we can just say ...
+- right? no, because ProfF has a type parameter
 
 ---
 
@@ -277,19 +299,13 @@ type Prof   = ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[
 type IdProf = (Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, 
 ```
 
-Natural SQL representation.
-
 <img align=right src="prof.png"/>
 
-```sql
-CREATE TABLE prof (
-  id     INTEGER IDENTITY,
-  parent INTEGER     NULL,
-  name   VARCHAR NOT NULL,
-  year   INTEGER NOT NULL,
-  FOREIGN KEY(parent) REFERENCES prof(id)        
-)
-```
+???
+
+- so this doesn't work because the types are infinite
+
+
 
 ---
 
@@ -310,23 +326,13 @@ type Prof   = ProfF[Prof]
 type IdProf = (Int, ProfF[IdProf])
 ```
 
-Natural SQL representation.
-
 <img align=right src="prof.png"/>
-
-```sql
-CREATE TABLE prof (
-  id     INTEGER IDENTITY,
-  parent INTEGER     NULL,
-  name   VARCHAR NOT NULL,
-  year   INTEGER NOT NULL,
-  FOREIGN KEY(parent) REFERENCES prof(id)        
-)
-```
 
 ???
 
-- doesn't compile
+- what if we make the type aliases self-referential? 
+- ok? no. doesn't compile
+- type aliases can't be recursive. but **classes** can ...
 
 ---
 
@@ -347,6 +353,36 @@ case class Prof(value: ProfF[Prof])
 case class IdProf(id: Int, value: ProfF[IdProf])
 ```
 
+???
+
+- So what if we make these case classes? Does this work?
+- YES! We could claim victory here because this actually does what we want.
+- But this is functional programming and we like abstraction, so let's push on this a little it and see if we can generalize it a little bit.
+
+---
+
+# Recursive Data
+
+A ~~recursive~~ data type for professors and their Ph.D. students.
+
+```tut:silent
+case class ProfF[A](
+  name: String,
+  year: Int,
+  students: List[A]
+)
+```
+
+```tut:silent:fail
+case class Prof[F[_]](value: F[Prof])
+case class IdProf[F[_]](id: Int, value: F[IdProf])
+```
+
+???
+
+- Ok, so there's nothing here's that's specific to ProfF, so let's factor that out.
+- But this doesn't compile because `Prof` needs a type argument, which is ... `F` right?
+
 ---
 
 # Recursive Data
@@ -363,8 +399,12 @@ case class ProfF[A](
 
 ```tut:silent
 case class Prof[F[_]](value: F[Prof[F]])
-case class IdProf[F[_]](id: Int, value: F[IdProf[F]])
+case class IdProf[F[_]](id: Int, value: F[IdProf[F]]) 
 ```
+
+???
+
+- We also note that this doesn't depend on the id being an `Int` so let's factor that out too.
 
 ---
 
@@ -385,6 +425,12 @@ case class Prof[F[_]](value: F[Prof[F]])
 case class IdProf[F[_], A](id: A, value: F[IdProf[F, A]])
 ```
 
+???
+
+- and we had to add the `A` to the type argument here since `IdProf` now has two type parameters.
+- Ok, so what do we have now? We have two recursive types that are totally generic; the first one can make any `F` recursive, and the second can make any `F` recursive *and* annotate each value with some arbitrary label.
+- It turns out these are well-known types.
+
 ---
 
 # Recursive Data
@@ -403,6 +449,10 @@ case class ProfF[A](
 case class Fix[F[_]](unfix: F[Fix[F]])
 case class Cofree[F[_], A](head: A, tail: F[Cofree[F, A]])
 ```
+
+- the first is ...
+- the second is ...
+- and I'll mention here that 
 
 ---
 
