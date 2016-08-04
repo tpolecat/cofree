@@ -93,6 +93,20 @@ case class Prof(
 )
 ```
 
+Natural SQL representation.
+
+<img align=right src="prof.png"/>
+
+```sql
+CREATE TABLE prof (
+  id     INTEGER IDENTITY,
+  parent INTEGER     NULL,
+  name   VARCHAR NOT NULL,
+  year   INTEGER NOT NULL,
+  FOREIGN KEY(parent) REFERENCES prof(id)        
+)
+```
+
 ---
 
 # Recursive Data
@@ -105,6 +119,20 @@ case class Prof(
   name: String,
   year: Int,
   students: List[Prof]
+)
+```
+
+Natural SQL representation.
+
+<img align=right src="prof.png"/>
+
+```sql
+CREATE TABLE prof (
+  id     INTEGER IDENTITY,
+  parent INTEGER     NULL,
+  name   VARCHAR NOT NULL,
+  year   INTEGER NOT NULL,
+  FOREIGN KEY(parent) REFERENCES prof(id)        
 )
 ```
 
@@ -123,6 +151,20 @@ case class Prof(
 )
 ```
 
+Natural SQL representation.
+
+<img align=right src="prof.png"/>
+
+```sql
+CREATE TABLE prof (
+  id     INTEGER IDENTITY,
+  parent INTEGER     NULL,
+  name   VARCHAR NOT NULL,
+  year   INTEGER NOT NULL,
+  FOREIGN KEY(parent) REFERENCES prof(id)        
+)
+```
+
 ---
 
 # Recursive Data
@@ -139,6 +181,20 @@ case class Prof(
 type IdProf = (Int, Prof)
 ```
 
+Natural SQL representation.
+
+<img align=right src="prof.png"/>
+
+```sql
+CREATE TABLE prof (
+  id     INTEGER IDENTITY,
+  parent INTEGER     NULL,
+  name   VARCHAR NOT NULL,
+  year   INTEGER NOT NULL,
+  FOREIGN KEY(parent) REFERENCES prof(id)        
+)
+```
+
 ---
 
 # Recursive Data
@@ -153,6 +209,20 @@ case class Prof(
 )
 
 type IdProf = (Int, Prof)
+```
+
+Natural SQL representation.
+
+<img align=right src="prof.png"/>
+
+```sql
+CREATE TABLE prof (
+  id     INTEGER IDENTITY,
+  parent INTEGER     NULL,
+  name   VARCHAR NOT NULL,
+  year   INTEGER NOT NULL,
+  FOREIGN KEY(parent) REFERENCES prof(id)        
+)
 ```
 
 ---
@@ -174,6 +244,20 @@ type Prof   = ProfF[ProfF]
 type IdProf = (Int, ProfF[(Int, ProfF)])
 ```
 
+Natural SQL representation.
+
+<img align=right src="prof.png"/>
+
+```sql
+CREATE TABLE prof (
+  id     INTEGER IDENTITY,
+  parent INTEGER     NULL,
+  name   VARCHAR NOT NULL,
+  year   INTEGER NOT NULL,
+  FOREIGN KEY(parent) REFERENCES prof(id)        
+)
+```
+
 ---
 
 # Recursive Data
@@ -193,6 +277,20 @@ type Prof   = ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[
 type IdProf = (Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, 
 ```
 
+Natural SQL representation.
+
+<img align=right src="prof.png"/>
+
+```sql
+CREATE TABLE prof (
+  id     INTEGER IDENTITY,
+  parent INTEGER     NULL,
+  name   VARCHAR NOT NULL,
+  year   INTEGER NOT NULL,
+  FOREIGN KEY(parent) REFERENCES prof(id)        
+)
+```
+
 ---
 
 # Recursive Data
@@ -210,6 +308,20 @@ case class ProfF[A](
 ```tut:silent:fail
 type Prof   = ProfF[Prof]
 type IdProf = (Int, ProfF[IdProf])
+```
+
+Natural SQL representation.
+
+<img align=right src="prof.png"/>
+
+```sql
+CREATE TABLE prof (
+  id     INTEGER IDENTITY,
+  parent INTEGER     NULL,
+  name   VARCHAR NOT NULL,
+  year   INTEGER NOT NULL,
+  FOREIGN KEY(parent) REFERENCES prof(id)        
+)
 ```
 
 ???
@@ -288,8 +400,8 @@ case class ProfF[A](
 ```
 
 ```tut:silent
-case class Fix[F[_]](value: F[Fix[F]])
-case class Cofree[F[_], A](id: A, value: F[Cofree[F, A]])
+case class Fix[F[_]](unfix: F[Fix[F]])
+case class Cofree[F[_], A](head: A, tail: F[Cofree[F, A]])
 ```
 
 ---
@@ -336,6 +448,7 @@ val p: Prof =
     ))
  ))
 ```
+<img align=right src="prof.png"/>
 
 
 
@@ -359,6 +472,7 @@ val p: Prof =
     )))
   ))
 ```
+<img align=right src="prof.png"/>
 
 
 ---
@@ -381,6 +495,7 @@ val p: IdProf =
     )))
   ))
 ```
+<img align=right src="idprof.png"/>
 
 ---
 
@@ -438,7 +553,7 @@ def prof(n: Int): Parser[Fix[ProfF]] =
     _    <- token(char(','))        // skip comma and following space
     year <- int                     // read an int
     _    <- char('\n')              // skip a newline
-    ss   <- many(prof(n + 2))     // recursively read more at indent + 2
+    ss   <- many(prof(n + 2))       // recursively read more at indent + 2
   } yield Fix(ProfF(name, year, ss))
 ```
 
@@ -645,6 +760,7 @@ So when you're working with traversable functors it's nice to know both of those
 class: center, middle
 
 # Can we do some SQL now?
+
 
 ---
 
