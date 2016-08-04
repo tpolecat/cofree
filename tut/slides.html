@@ -755,9 +755,9 @@ io.unsafePerformIO
 ```tut:silent
 def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   for {
-    data     <- sql"SELECT name, year FROM prof WHERE id = $id".query[(String, Int)].unique
-    students <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
-  } yield ProfF(data._1, data._2, students)
+    d  <- sql"SELECT name, year FROM prof WHERE id = $id".query[(String, Int)].unique
+    ss <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
+  } yield ProfF(d._1, d._2, ss)
 ```
 ---
 
@@ -767,9 +767,9 @@ def readNode(id: Int): ConnectionIO[ProfF[Int]] =
 ```tut:silent
 def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   for {
-    data     <- sql"SELECT name, year FROM prof WHERE id = $id".query[(String, Int)].unique
-    students <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
-  } yield ProfF(data._1, data._2, students)
+    d  <- sql"SELECT name, year FROM prof WHERE id = $id".query[(String, Int)].unique
+    ss <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
+  } yield ProfF(d._1, d._2, ss)
 
 def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
   readNode(id).flatMap { pi =>
@@ -786,9 +786,9 @@ def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
 ```tut:silent
 def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   for {
-    data     <- sql"SELECT name, year FROM prof WHERE id = $id".query[(String, Int)].unique
-    students <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
-  } yield ProfF(data._1, data._2, students)
+    d  <- sql"SELECT name, year FROM prof WHERE id = $id".query[(String, Int)].unique
+    ss <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
+  } yield ProfF(d._1, d._2, ss)
 
 def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
   readNode(id).flatMap { pi =>
@@ -804,9 +804,9 @@ def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
 ```tut:silent
 def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   for {
-    data     <- sql"SELECT name, year FROM prof WHERE id = $id".query[(String, Int)].unique
-    students <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
-  } yield ProfF(data._1, data._2, students)
+    d  <- sql"SELECT name, year FROM prof WHERE id = $id".query[(String, Int)].unique
+    ss <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
+  } yield ProfF(d._1, d._2, ss)
 
 def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
   readNode(id).flatMap(_.traverse(readTree).map(Cofree(id, _)))
