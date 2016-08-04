@@ -957,7 +957,10 @@ def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
 
 ???
 
-
+- Ok so here's a method that constructs a program that inserts a row into the `prof` table and yields the generated id.
+- (explain) 
+- It disregards the childern entirely, which you know because of the exstential placeholder; the implementation can't do anything with the children because it doesn't even know what type they are.
+-
 
 ---
 
@@ -979,6 +982,12 @@ def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]
   } yield Cofree(h, t) 
 ```
 
+???
+
+- And here's a metohod that constructs a program to insert a `Fix[ProfF]` into the database, and yield another tree with the same structure but annotated with database ids. Which is what we wanted to do.
+- So how does this work?
+- (explain)
+- ok so we know that `.map` and then `.sequence` is `.traverse` so let's simplify that
 ---
 
 # Insert a Tree
@@ -997,6 +1006,10 @@ def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]
            .traverse(insertTree(_, Some(h))) // same as map + sequence
   } yield Cofree(h, t) 
 ```
+
+???
+
+- (next slide)
 
 ---
 
@@ -1028,6 +1041,10 @@ def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]
   } yield Cofree(h, t) 
 ```
 
+???
+
+- So, this `insertTree` operation can be generalized but the `Option` type makes it a little messy so we're just going to leave it as-is.
+
 ---
 
 # Insert a Tree
@@ -1053,11 +1070,21 @@ def ioDrawCofree[F[_]: Traverse, A](fa: Cofree[F, A], indent: Int = 0): IO[Unit]
   } yield ()
 ```
 
+And it works!
+
 ```tut
 val p = prof(0).parseOnly(data).option.get // yolo
 val io = insertTree(p, None).transact(xa).flatMap(c => ioDrawCofree(c))
 io.unsafePerformIO
 ```
+
+???
+
+- so first we parse the value like we did before
+- then we construct a program to insert it, passing the result to `ioDrawCofree` which is the same printing code, just in `IO` so it doesn't side-effect.
+- Then we run the program and see that we get back an annotated tree.
+- It starts with 1 which is a little suspicious, so let's do it again ...
+
 
 ---
 
@@ -1066,6 +1093,11 @@ io.unsafePerformIO
 ```tut
 io.unsafePerformIO
 ```
+
+???
+- and yeah, it really is using database sequence to get the ids.
+- I should mention that this whole talk is one long  REPL session that has been typechecked and executed, I just haven't been showing output. I use a tool called **tut** to do this.
+- Ok, so now how do we read trees back?
 
 ---
 
@@ -1078,6 +1110,13 @@ def readNode(id: Int): ConnectionIO[ProfF[Int]] =
     ss <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
   } yield ProfF(d._1, d._2, ss)
 ```
+
+???
+- Here's a method that constructs a program to compute a `ProfF[Inf]` ... no what does that mean? It's a `ProfF` whose children are database ids. So instead of object references we have database references.
+- I think this is a really nice consequence of this encoding; sometimes you want the whole structure and sometimes you just want a "local" hunk, and we get both with the same data type.
+- I should acknowledge that this is a very inefficient way to do this; it would be much faster to read the whole thing into memory and assemble the tree locally, but this is easier to follow and ends up being a better example.
+- So now that we have a way to read a slice with database references, how do we assemble this into a tree?
+
 ---
 
 
@@ -1098,6 +1137,10 @@ def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
   }
 ```
 
+???
+- here we go. (explain)
+- as before we know that `.map` and then `.sequence` is ...
+
 ---
 
 # And now read it back.
@@ -1116,6 +1159,9 @@ def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
   }
 ```
 
+???
+- (next)
+
 ---
 
 # And now read it back.
@@ -1131,6 +1177,8 @@ def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
   readNode(id).flatMap(_.traverse(readTree).map(Cofree(id, _)))
 ```
 
+???
+- Ok so I'd like to take a minute to look at the `readTree` method more closely and see if we can generalize it.
 
 ---
 
@@ -1141,6 +1189,9 @@ def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
 def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
   readNode(id).flatMap(_.traverse(readTree).map(Cofree(id, _)))
 ```
+
+???
+- Let's factor out the call to `readNode`.
 
 
 ---
@@ -1153,6 +1204,9 @@ def readTree(id: Int)(f: Int => ConnectionIO[ProfF[Int]]): ConnectionIO[Cofree[P
   f(id).flatMap(_.traverse(readTree(_)(f)).map(Cofree(id, _)))
 ```
 
+???
+
+- Ok, so `f` gives us a `ConnectionIO` but all we're doing with it is calling `.flatMap` and then `.map`, so it should work with any monad. Let's factor that out.
 
 ---
 
@@ -1164,6 +1218,9 @@ def readTree[M[_]: Monad](id: Int)(f: Int => M[ProfF[Int]]): M[Cofree[ProfF, Int
   f(id).flatMap(_.traverse(readTree(_)(f)).map(Cofree(id, _)))
 ```
 
+???
+
+- So inside that `M` we have a `ProfF[Int]` but the only thing we're doing with it is calling `.traverse`, so it should work with any traversable functor. Let's factor that out.
 
 ---
 
@@ -1175,6 +1232,9 @@ def readTree[M[_]: Monad, F[_]: Traverse](id: Int)(f: Int => M[F[Int]]): M[Cofre
   f(id).flatMap(_.traverse(readTree(_)(f)).map(Cofree(id, _)))
 ```
 
+???
+
+- And we're not doing anything with the `Int` but passing it as an argument so let's factor that out too.
 
 ---
 
@@ -1186,6 +1246,8 @@ def readTree[M[_]: Monad, F[_]: Traverse, A](a: A)(f: A => M[F[A]]): M[Cofree[F,
   f(a).flatMap(_.traverse(readTree(_)(f)).map(Cofree(a, _)))
 ```
 
+???
+- ok, so now we have something definitely useful and totally generic.
 
 ---
 
@@ -1197,6 +1259,11 @@ def unfoldCM[M[_]: Monad, F[_]: Traverse, A](a: A)(f: A => M[F[A]]): M[Cofree[F,
   f(a).flatMap(_.traverse(unfoldCM(_)(f)).map(Cofree(a, _)))
 ```
 
+???
+
+- This is monadic cofree corecursion; it takes a seed value and feeds it into a function that generates an F in some context, the traverses it to expand the `A`'s in the `F`, forever, or until there are no more `A`s; in this case it means we're at the leaves of the tree.
+- And what it gives back is a Cofree annotated with the key values.
+- And does this method exist in scalaz already? NO! The non-monadic version does but not this one. It's an oversight.
 
 ---
 
@@ -1208,10 +1275,15 @@ def unfoldCM[M[_]: Monad, F[_]: Traverse, A](a: A)(f: A => M[F[A]]): M[Cofree[F,
   f(a).flatMap(_.traverse(unfoldCM(_)(f)).map(Cofree(a, _)))
 
 // and we can define readTree in terms of it
-// we're using a totally generic corecursive unfold to do database programming, which is kind of cool
 def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
   unfoldCM(id)(readNode)
 ```
+
+???
+
+- so in any case, with this method our `readTree` method is trivial.
+- and I think it's really cool that we're using a totally generic corecursive unfold to do database programming. We never once thought "hey we're talking to a database here so we need to be careful" ... we just go where the types take us.
+- But does it work?
 
 ---
 
@@ -1223,7 +1295,8 @@ Let's read Hilbert's sub-tree (id = 32).
 val io = readTree(32).transact(xa).flatMap(c => ioDrawCofree(c))
 io.unsafePerformIO
 ```
-
+- yes!
+- Ok, so what have we seen?
 
 ---
 
@@ -1233,6 +1306,14 @@ io.unsafePerformIO
 - We used them to do something useful (or at least interesting).
 - We pushed on our code and did some equational reasoning.
 - We were not frightened.
+
+???
+- `Fix` and `Cofree` popped out of our model naturally; it's not a contrived example, the question of what to do with database IDs is a real thing we think about.
+- And we used them to represent the same data type in a bunch of different ways: as a simple recursive data type, as an "unmoored" node with unknown child types, as as tree annotated with parse positions, as a node with database references rather than object references, and of course as a tree annotated with database ids. We did all of this with the same definition of `ProfF`.
+- We did some code pushing. Not much more to say about that, I just wanted to demonstrate the way we think about things when we do FP with expressive types, so hopefully even if you didn't follow all of it you get a sense for how powerful it is.
+- And hopefully you all survived. And if not I have bad news for you because Greg Pfiel is up next and he's going to be talking about using recursion schemes in a much more general and more powerful way.
+
+- sooooo, that's it.
 
 ---
 
