@@ -941,6 +941,7 @@ sql"select id from prof".query[Int].list.transact(xa).unsafePerformIO
 - Ok so I don't have time to explain doobie in any detail but you'll get a taste for what it's like programming with it, which I usually describe as "uneventful".
 - Doobie programs are values. They're data. They don't "do" anything until you translate them to some target type like `IO` or `Task` and then execute that value using whatever mechanism it provides. That part isn't doobie's problem.
 - So here ...
+- And that's about all we need to know right now.
 
 ---
 
@@ -953,6 +954,10 @@ def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
     VALUES ($op, ${p.name}, ${p.year})
   """.update.withUniqueGeneratedKeys("id")
 ```
+
+???
+
+
 
 ---
 
@@ -1225,8 +1230,8 @@ io.unsafePerformIO
 # Review
 
 - We learned about some recursive types.
-- We used them to do something useful.
-- We did some equational reasoning.
+- We used them to do something useful (or at least interesting).
+- We pushed on our code and did some equational reasoning.
 - We were not frightened.
 
 ---
