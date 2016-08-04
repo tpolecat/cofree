@@ -452,9 +452,28 @@ case class Cofree[F[_], A](head: A, tail: F[Cofree[F, A]])
 
 - the first is ...
 - the second is ...
-- and I'll mention here that 
+- and I'll mention two points here that `Cofree` (sometimes called the cofree comonad) is the dual of the `Free` monad. Cofree is an A **and** an `F[Cofree[F, A]]` and Free is an `A` **or** an `F[Free[F,A]]`. So that's how they're related and that's where the name comes from.
+- and i'll also say that both free and cofree are really just special cases of `Fix`, so if you're interested in this stuff you might try to do that as an exercise.
+
+- but this illustrates what I mean about pushing on code. if you push hard enough sometimes it disappears entirely, because:
 
 ---
+
+class: center, middle
+
+### tpolecat's law of mistaken invention:
+
+## _"Any code that is sufficiently polymorphic and plausibly useful probably already exists in scalaz."_ 
+
+#### *somewhat less true of cats, but not for much longer
+
+???
+
+- But in this case both scalaz and cats provide `Cofree` and neither provides `Fix`.
+- Ok so now that we know about the general types we can define `Prof` and `ProfF` trivially.
+
+---
+
 
 # Recursive Data
 
@@ -473,10 +492,16 @@ case class Fix[F[_]](unfix: F[Fix[F]])
 case class Cofree[F[_], A](head: A, tail: F[Cofree[F, A]])
 ```
 
+Annotated and un-annotated recursive `ProfF`.
+
 ```tut:silent
 type Prof   = Fix[ProfF]
 type IdProf = Cofree[ProfF, Int]
 ```
+
+???
+
+- So by this point I fear I may have lost some people, so just to get back to reality I want to show you how you can construct these things.
 
 ---
 
@@ -500,7 +525,9 @@ val p: Prof =
 ```
 <img align=right src="prof.png"/>
 
+???
 
+- Here is our original recursive type and a construction. Nothing fancy here.
 
 ---
 
@@ -524,6 +551,9 @@ val p: Prof =
 ```
 <img align=right src="prof.png"/>
 
+???
+
+- And here's the version with `Fix`. It's identical in structure but there's an extra `Fix` constructor wrapped around each instance.
 
 ---
 
@@ -547,11 +577,22 @@ val p: IdProf =
 ```
 <img align=right src="idprof.png"/>
 
+???
+
+- And here's the `Cofree` version, which also has an annotation (an `Int` in this case) associated with each instance.
+- So even though the types here are a little challenging at first and the names are kind of intimidating, but it's just data.
+
 ---
 
 class: center, middle
 
-# Intermezzo
+# Mezzanine Level
+
+???
+
+- Ok, so before we get back to our database problem I want to take a detour and show you an example of programming with these types, again just to illustrate that they're not scary.
+
+- So we're going to write some parsers.
 
 ---
 
@@ -581,9 +622,11 @@ val data =
      |                Steven Awodey, 1997
      |                William Howard, 1956
      |""".stripMargin
-
-
 ```
+
+???
+
+So, here's some sample data that we want to parse into our fixpoint types. You may recognize some of these names.
 
 ---
 
@@ -607,6 +650,10 @@ def prof(n: Int): Parser[Fix[ProfF]] =
   } yield Fix(ProfF(name, year, ss))
 ```
 
+???
+
+- And here's one way to do it. This is written with `atto` which is a parsing library I work on but it would look the same with Li Haoyi's Fastparse or pretty much any monadic parser combinator library.
+- <explain it>
 
 ---
 
@@ -628,6 +675,11 @@ def prof(n: Int): Parser[Fix[ProfF]] =
 prof(0).parseOnly(data).option
 ```
 
+???
+
+- and it works!
+- but the `toString` for `Fix` isn't that great so I'll call a utility method that prints out the tree. I'm not going to show it to you but it's in the example code.
+
 ---
 
 # Parse Positions
@@ -647,6 +699,10 @@ def drawFix(fa: Fix[ProfF]): Unit = {
 prof(0).parseOnly(data).option.foreach(drawFix)
 ```
 
+???
+
+- right. that looks good.
+- now let's see what we can do with `Cofree`.
 
 ---
 
@@ -666,6 +722,10 @@ def prof(n: Int): Parser[Fix[ProfF]] =
   } yield Fix(ProfF(name, year, ss))
 ```
 
+???
+
+- Here's our `Fix` parser ...
+
 ---
 
 # Parse Positions
@@ -683,6 +743,10 @@ def posProf(n: Int): Parser[Cofree[ProfF, (Int, Int)]] =
     p1   <- pos
   } yield Cofree((p0, p1), ProfF(name, year, ss))
 ```
+
+???
+
+- And here's one with `Cofree`, and what we're doing here is annotating each `ProfF` with the starting and ending parse positions.
 
 ---
 
@@ -706,6 +770,10 @@ def posProf(n: Int): Parser[Cofree[ProfF, (Int, Int)]] =
 posProf(0).parseOnly(data).option
 ```
 
+???
+
+- And it works, again with an awful `toString`
+
 ---
 
 # Parse Positions
@@ -725,11 +793,22 @@ def drawCofree[A](fa: Cofree[ProfF, A]): Unit = {
 posProf(0).parseOnly(data).option.foreach(drawCofree)
 ```
 
+???
+- So our original problem was database IDs but we can use that slot for anything. Without any changes to our API we now have source positions.
+- And you can see how this can be really useful for something like a computer language, because you have an AST that you might want to annotate with source positions, types, strictness analysis, any number of things, and by encoding your data types this way you get that ability for free, which is really nice.
+
+- Ok, so back to our database problem.
+
+
 ---
 
 class: center, middle
 
-# Games
+# Well not quite yet. Almost.
+
+???
+
+- Ok so before we do that I need to explain something that you may have been wondering about.
 
 ---
 
@@ -756,6 +835,11 @@ val ps = ProfF("Bob", 1976, List("foo", "bar"))
 ps.map(s => s.length)
 ```
 
+???
+
+- And if you follow this design pattern your data type will *always* be a functor, in fact it's called a pattern functor, possibly because you can plug it in to any recursion pattern but I don't really know.
+- In any case the functor here is straightforward because we can just delegate to `.map` on `List` and we're done.
+
 ---
 
 # But wait, there's more!
@@ -781,11 +865,16 @@ val p = ProfF("Bob", 1975, List(Option(1), Option(2)))
 p.sequence
 ```
 
+???
+
+- It turns out that `ProfF` is also a **traversable** functor. This means we can turn a `ProfF[F[A]]` into a `F[ProfF[A]]` if `F` is an applicative functor. We can flip the type constructors, which is what the example illustrates. Look at the types.
+- The implementation is a little more involved but again we just delegate to `traverse` on `List` for most of the work because `List` is also a traversable functor.
+
 ---
 
 # (small digression)
 
-Because "map and then sequence" is so common, we provide `traverse` which does them in one step.
+Because "map and then sequence" is so common, we also have `traverse` which does them in one step. You can define one in terms of the other but here's one way to do it:
 
 ```scala
 fa.map(f).sequence <~> fa.traverse(f) // (1) definition of traverse
@@ -804,6 +893,12 @@ fa.sequence <~> fa.traverse(identity)     // by (1) above
 
 So when you're working with traversable functors it's nice to know both of those substitutions.
 
+???
+
+- and by `<~>` we mean "the same thing" ... you can freely substitute one for the other.
+- and given that we can find another identity
+- this is kind of a trivial example but again it's just that's not in your toolchest when you're first learning about functional programming and I always like to give examples when I can.
+- Ok.
 
 ---
 
@@ -815,6 +910,8 @@ class: center, middle
 ---
 
 # Get your doobie on
+
+Doobie is a **pure functional** (i.e., side-effect free) JDBC library for Scala. See `tpolecat/doobie` for doc, presentations, etc.
 
 ```tut:silent
 // a transactor abstracts over connection pools and io-effect types
@@ -840,6 +937,10 @@ create.transact(xa).unsafePerformIO
 sql"select id from prof".query[Int].list.transact(xa).unsafePerformIO
 ```
 
+???
+- Ok so I don't have time to explain doobie in any detail but you'll get a taste for what it's like programming with it, which I usually describe as "uneventful".
+- Doobie programs are values. They're data. They don't "do" anything until you translate them to some target type like `IO` or `Task` and then execute that value using whatever mechanism it provides. That part isn't doobie's problem.
+- So here ...
 
 ---
 
