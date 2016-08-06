@@ -2,6 +2,6 @@
 
 Companion code for the talk.
 
-- Slides are published [here](http://tpolecat.github.io/presentations/cofree/slides.html) ... press `?` for help.
+- Slides are published [here](http://tpolecat.github.io/presentations/cofree/slides) ... press `?` for help.
 - If you wish to build the slides for some reason, type `tut` at the sbt prompt.
 
