@@ -1,6 +1,9 @@
 import atto._, Atto._
 import scalaz._, Scalaz.{ char => _, _ }, scalaz.effect._
+
 import doobie.imports._
+import doobie.contrib.postgresql.pgtypes._
+import doobie.tsql._
 
 /** Companion code for the talk "Fun and Games with Fix, Cofree, and Doobie". */
 object cofree extends Extras with SafeApp {
@@ -92,26 +95,6 @@ object cofree extends Extras with SafeApp {
     } yield Cofree((p0, p1), ProfF(name, uni, year, ss))
 
   ///
-  /// DATABASE SETUP
-  ///
-  /// This and other database operations are expressed with doobie (https://github.com/tpolecat/doobie)
-  /// which is a pure-functional JDBC layer. This is a pure value.
-  ///
-
-  /** A program to create our schema. */
-  def create: ConnectionIO[Int] =
-    sql"""
-      CREATE TABLE prof (
-        id     INTEGER IDENTITY,
-        parent INTEGER     NULL,
-        name   VARCHAR NOT NULL,
-        uni    VARCHAR NOT NULL,
-        year   INTEGER NOT NULL,
-        FOREIGN KEY(parent) REFERENCES prof(id)        
-      );
-    """.update.run
-
-  ///
   /// INSERT
   ///
 
@@ -154,9 +137,9 @@ object cofree extends Extras with SafeApp {
 
   /** A transactor abstracts over connection pools and io-effect types. */
   val xa = DriverManagerTransactor[IO](
-    "org.h2.Driver",                       // driver
-    "jdbc:h2:mem:test;DB_CLOSE_DELAY=-1",  // in-memory database
-    "sa", ""                               // user, password
+    "org.postgresql.Driver",// driver
+    "jdbc:postgresql:prof", // in-memory database
+    "postgres", ""          // user, password
   )
 
   /** Our main method, via SafeApp */
@@ -169,9 +152,6 @@ object cofree extends Extras with SafeApp {
     // Our database program
     val action: ConnectionIO[Unit] = 
       for {
-
-        // Set up the db
-        _ <- create
 
         // insert and draw
         t <- insertTree(p)
@@ -187,6 +167,35 @@ object cofree extends Extras with SafeApp {
     action.transact(xa) 
 
   }
+
+
+
+  ///
+  /// MORE MORE MORE
+  ///
+
+  /** And the non-monadic version, for reference. */
+  def unfoldC[F[_]: Functor, A](id: A)(f: A => F[A]): Cofree[F, A] =
+    Cofree(id, f(id).map(unfoldC(_)(f)))
+
+  def allAtOnce(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
+    sql"""
+      WITH RECURSIVE rec(id, parent, name, uni, year, students) AS(
+       SELECT * FROM prof_closure WHERE id = $id
+       UNION ALL SELECT p.* FROM prof_closure p, rec r
+        WHERE r.id = p.parent
+      ) SELECT id, name, uni, year, students FROM rec;
+    """.query[(Int, ProfF[Int])].list.map(ps => unfoldC(id)(ps.toMap))
+
+  def allAtOnce2(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
+    tsql"""
+      WITH RECURSIVE rec(id, parent, name, uni, year, students) AS(
+       SELECT * FROM prof_closure WHERE id = $id
+       UNION ALL SELECT p.* FROM prof_closure p, rec r
+        WHERE r.id = p.parent
+      ) SELECT id, name, uni, year, students FROM rec;
+    """.as[Int => ProfF[Int]].map(unfoldC(id)(_))
+
 
 }
 

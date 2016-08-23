@@ -14,8 +14,10 @@ scalacOptions ++= Seq(
 )
 
 libraryDependencies ++= Seq(
-  "org.tpolecat" %% "doobie-core"               % "0.2.4",
-  "org.tpolecat" %% "doobie-contrib-h2"         % "0.2.4",
+  "org.tpolecat" %% "doobie-core"               % "0.3.0",
+  "org.tpolecat" %% "doobie-contrib-postgresql" % "0.3.0",
+  "org.tpolecat" %% "doobie-tsql-core" % "0.1-SNAPSHOT",
+  "org.tpolecat" %% "doobie-tsql-postgres" % "0.1-SNAPSHOT",
   "org.tpolecat" %% "atto-core"                 % "0.4.2"
 )
 
@@ -27,3 +29,11 @@ tutSourceDirectory := baseDirectory.value / "tut"
 
 tutTargetDirectory := baseDirectory.value / "tut-out"
 
+addCompilerPlugin("com.milessabin" % "si2712fix-plugin" % "1.2.0" cross CrossVersion.full)
+
+initialCommands := """
+  |import scalaz._, Scalaz._
+  |import doobie.imports._
+  |import doobie.contrib.postgresql.pgtypes._
+  |import cofree._
+  """.stripMargin.trim
