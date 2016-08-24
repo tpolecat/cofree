@@ -15,7 +15,7 @@ trait Extras {
 
   /** Parser that yields the current offset in the input. You are not expected to understand this. */
   val pos: Parser[Int] = {
-    import Trampoline._
+    import Trambopoline._
     import Parser._
     import Parser.Internal._
     new Parser[Int] {

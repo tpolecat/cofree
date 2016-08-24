@@ -1,9 +1,11 @@
-import atto._, Atto._
+import atto._, Atto._, atto.compat.scalaz._
 import scalaz._, Scalaz.{ char => _, _ }, scalaz.effect._
 
 import doobie.imports._
 import doobie.contrib.postgresql.pgtypes._
+
 import doobie.tsql._
+import doobie.tsql.postgres._
 
 /** Companion code for the talk "Fun and Games with Fix, Cofree, and Doobie". */
 object cofree extends Extras with SafeApp {
@@ -103,7 +105,7 @@ object cofree extends Extras with SafeApp {
     sql"""
       INSERT INTO prof (parent, name, uni, year)
       VALUES ($parent, ${p.name}, ${p.uni}, ${p.year})
-    """.update.withUniqueGeneratedKeys("id")
+    """.update.withUniqueGeneratedKeys("id") // TODO: can't write option with tsql :-\
 
   /** Insert a tree rooted at `p` with an optional parent. */
   def insertTree(fp: Fix[ProfF], parent: Option[Int] = None): ConnectionIO[Cofree[ProfF, Int]] =
@@ -119,8 +121,8 @@ object cofree extends Extras with SafeApp {
   /** Read a ProfF with the given id, yielding a ProfF that references its children by id. */
   def readFlat(id: Int): ConnectionIO[ProfF[Int]] =
     for {
-      data <- sql"SELECT name, uni, year FROM prof WHERE id = $id".query[(String, String, Int)].unique
-      kids <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
+      data <- tsql"SELECT name, uni, year FROM prof WHERE id = $id".unique[(String, String, Int)]
+      kids <- tsql"SELECT id FROM prof WHERE parent = $id".as[List[Int]]
     } yield ProfF(data._1, data._2, data._3, kids)
 
   /** Monadic cofree corecursion. */
@@ -130,6 +132,24 @@ object cofree extends Extras with SafeApp {
   /** Read an id-annotated tree. */
   def read(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
     unfoldCM(id)(readFlat)
+
+  ///
+  /// READ AGAIN, with fancy SQL
+  ///
+
+  /** And the non-monadic version, for reference. */
+  def unfoldC[F[_]: Functor, A](id: A)(f: A => F[A]): Cofree[F, A] =
+    Cofree(id, f(id).map(unfoldC(_)(f)))
+
+  def read2(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
+    tsql"""
+      WITH RECURSIVE rec(id, parent, name, uni, year, students) AS(
+       SELECT * FROM prof_closure WHERE id = $id
+       UNION ALL SELECT p.* FROM prof_closure p, rec r
+        WHERE r.id = p.parent
+      ) SELECT id, name, uni, year, students 
+        FROM rec;
+    """.as[Int => ProfF[Int]].map(unfoldC(id)(_))
 
   ///
   /// ENTRY POINT
@@ -155,10 +175,14 @@ object cofree extends Extras with SafeApp {
 
         // insert and draw
         t <- insertTree(p)
-        _ <- draw(t)
+        // _ <- draw(t)
 
         // Read back and draw
         t <- read(t.head)
+        // _ <- draw(t)
+
+        // Again
+        t <- read2(t.head)
         _ <- draw(t)
 
       } yield ()
@@ -168,33 +192,6 @@ object cofree extends Extras with SafeApp {
 
   }
 
-
-
-  ///
-  /// MORE MORE MORE
-  ///
-
-  /** And the non-monadic version, for reference. */
-  def unfoldC[F[_]: Functor, A](id: A)(f: A => F[A]): Cofree[F, A] =
-    Cofree(id, f(id).map(unfoldC(_)(f)))
-
-  def allAtOnce(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
-    sql"""
-      WITH RECURSIVE rec(id, parent, name, uni, year, students) AS(
-       SELECT * FROM prof_closure WHERE id = $id
-       UNION ALL SELECT p.* FROM prof_closure p, rec r
-        WHERE r.id = p.parent
-      ) SELECT id, name, uni, year, students FROM rec;
-    """.query[(Int, ProfF[Int])].list.map(ps => unfoldC(id)(ps.toMap))
-
-  def allAtOnce2(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
-    tsql"""
-      WITH RECURSIVE rec(id, parent, name, uni, year, students) AS(
-       SELECT * FROM prof_closure WHERE id = $id
-       UNION ALL SELECT p.* FROM prof_closure p, rec r
-        WHERE r.id = p.parent
-      ) SELECT id, name, uni, year, students FROM rec;
-    """.as[Int => ProfF[Int]].map(unfoldC(id)(_))
 
 
 }
