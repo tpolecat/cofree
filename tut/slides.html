@@ -1074,19 +1074,6 @@ io.unsafePerformIO
 - so first we parse the value like we did before
 - then we construct a program to insert it, passing the result to `ioDrawCofree` which is the same printing code, just in `IO` so it doesn't side-effect.
 - Then we run the program and see that we get back an annotated tree.
-- It starts with 1 which is a little suspicious, so let's do it again ...
-
-
----
-
-# Insert a Tree
-
-```tut
-io.unsafePerformIO
-```
-
-???
-- and yeah, it really is using database sequence to get the ids.
 - I should mention that this whole talk is one long  REPL session that has been typechecked and executed, I just haven't been showing output. I use a tool called **tut** to do this.
 - Ok, so now how do we read trees back?
 
@@ -1097,8 +1084,8 @@ io.unsafePerformIO
 ```tut:silent
 def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   for {
-    d  <- sql"SELECT name, year FROM prof WHERE id = $id".query[(String, Int)].unique
-    ss <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
+    d  <- tsql"SELECT name, year FROM prof WHERE id = $id".unique[(String, Int)]
+    ss <- tsql"SELECT id FROM prof WHERE parent = $id".as[List[Int]]
   } yield ProfF(d._1, d._2, ss)
 ```
 
@@ -1116,8 +1103,8 @@ def readNode(id: Int): ConnectionIO[ProfF[Int]] =
 ```tut:silent
 def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   for {
-    d  <- sql"SELECT name, year FROM prof WHERE id = $id".query[(String, Int)].unique
-    ss <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
+    d  <- tsql"SELECT name, year FROM prof WHERE id = $id".unique[(String, Int)]
+    ss <- tsql"SELECT id FROM prof WHERE parent = $id".as[List[Int]]
   } yield ProfF(d._1, d._2, ss)
 
 def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
@@ -1139,8 +1126,8 @@ def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
 ```tut:silent
 def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   for {
-    d  <- sql"SELECT name, year FROM prof WHERE id = $id".query[(String, Int)].unique
-    ss <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
+    d  <- tsql"SELECT name, year FROM prof WHERE id = $id".unique[(String, Int)]
+    ss <- tsql"SELECT id FROM prof WHERE parent = $id".as[List[Int]]
   } yield ProfF(d._1, d._2, ss)
 
 def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
@@ -1160,8 +1147,8 @@ def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
 ```tut:silent
 def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   for {
-    d  <- sql"SELECT name, year FROM prof WHERE id = $id".query[(String, Int)].unique
-    ss <- sql"SELECT id FROM prof WHERE parent = $id".query[Int].list
+    d  <- tsql"SELECT name, year FROM prof WHERE id = $id".unique[(String, Int)]
+    ss <- tsql"SELECT id FROM prof WHERE parent = $id".as[List[Int]]
   } yield ProfF(d._1, d._2, ss)
 
 def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =

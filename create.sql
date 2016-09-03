@@ -75,7 +75,6 @@ CREATE TABLE prof (
     id integer NOT NULL,
     parent integer,
     name character varying NOT NULL,
-    uni character varying NOT NULL,
     year integer NOT NULL
 );
 
@@ -101,6 +100,21 @@ ALTER TABLE ONLY prof_closure REPLICA IDENTITY NOTHING;
 ALTER TABLE prof_closure OWNER TO postgres;
 
 --
+-- Name: prof_node; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE prof_node (
+    id integer NOT NULL,
+    parent integer,
+    name character varying NOT NULL,
+    uni character varying NOT NULL,
+    year integer NOT NULL
+);
+
+
+ALTER TABLE prof_node OWNER TO postgres;
+
+--
 -- Name: prof_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -118,21 +132,49 @@ ALTER TABLE prof_id_seq OWNER TO postgres;
 -- Name: prof_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
-ALTER SEQUENCE prof_id_seq OWNED BY prof.id;
+ALTER SEQUENCE prof_id_seq OWNED BY prof_node.id;
+
+
+--
+-- Name: prof_node_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE prof_node_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE prof_node_id_seq OWNER TO postgres;
+
+--
+-- Name: prof_node_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE prof_node_id_seq OWNED BY prof.id;
 
 
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY prof ALTER COLUMN id SET DEFAULT nextval('prof_id_seq'::regclass);
+ALTER TABLE ONLY prof ALTER COLUMN id SET DEFAULT nextval('prof_node_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY prof_node ALTER COLUMN id SET DEFAULT nextval('prof_id_seq'::regclass);
 
 
 --
 -- Data for Name: prof; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-COPY prof (id, parent, name, uni, year) FROM stdin;
+COPY prof (id, parent, name, year) FROM stdin;
 \.
 
 
@@ -140,14 +182,37 @@ COPY prof (id, parent, name, uni, year) FROM stdin;
 -- Name: prof_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('prof_id_seq', 59, true);
+SELECT pg_catalog.setval('prof_id_seq', 537, true);
+
+
+--
+-- Data for Name: prof_node; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY prof_node (id, parent, name, uni, year) FROM stdin;
+\.
+
+
+--
+-- Name: prof_node_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('prof_node_id_seq', 23, true);
+
+
+--
+-- Name: prof_node_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY prof
+    ADD CONSTRAINT prof_node_pkey PRIMARY KEY (id);
 
 
 --
 -- Name: prof_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY prof
+ALTER TABLE ONLY prof_node
     ADD CONSTRAINT prof_pkey PRIMARY KEY (id);
 
 
@@ -162,8 +227,8 @@ CREATE RULE "_RETURN" AS
     p.uni,
     p.year,
     array_agg_notnull(c.id) AS students
-   FROM (prof p
-     LEFT JOIN prof c ON ((c.parent = p.id)))
+   FROM (prof_node p
+     LEFT JOIN prof_node c ON ((c.parent = p.id)))
   GROUP BY p.id;
 
 
@@ -171,8 +236,8 @@ CREATE RULE "_RETURN" AS
 -- Name: prof_parent_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY prof
-    ADD CONSTRAINT prof_parent_fkey FOREIGN KEY (parent) REFERENCES prof(id);
+ALTER TABLE ONLY prof_node
+    ADD CONSTRAINT prof_parent_fkey FOREIGN KEY (parent) REFERENCES prof_node(id);
 
 
 --

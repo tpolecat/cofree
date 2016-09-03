@@ -1,12 +1,12 @@
 import atto._, Atto._
-import doobie.imports._
+import doobie.imports._, doobie.tsql._
 import scalaz._, Scalaz._
 
 /** Some helpers that would be distracting if they were in the main class :-\ */
 trait Extras {
 
   /** Dump a Cofree as a tree. */
-  def draw[F[_]: Traverse, A](fa: Cofree[F, A], indent: Int = 0): ConnectionIO[Unit] = 
+  def draw[F[_]: Traverse, A](fa: Cofree[F, A], indent: Int = 0): ConnectionIO[Unit] =
     for {
       _ <- HC.delay(print(" " * indent))
       _ <- HC.delay(println(fa.head + " :< " + fa.tail))
@@ -25,5 +25,11 @@ trait Extras {
     }
   }
 
-}
+  // This is not inferable for mysterious reasons
+  implicit val optionIntWrite = Write.option[JdbcType.JdbcInteger, String, Int]
 
+  // tsql"select ? :: int".apply(Option(1))
+
+
+
+}

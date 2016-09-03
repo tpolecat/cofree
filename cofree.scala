@@ -102,10 +102,11 @@ object cofree extends Extras with SafeApp {
 
   /** Insert a node with the given parent, disregarding children. */
   def insertNode(parent: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
-    sql"""
-      INSERT INTO prof (parent, name, uni, year)
+    tsql"""
+      INSERT INTO prof_node (parent, name, uni, year)
       VALUES ($parent, ${p.name}, ${p.uni}, ${p.year})
-    """.update.withUniqueGeneratedKeys("id") // TODO: can't write option with tsql :-\
+      RETURNING id
+    """.unique[Int]
 
   /** Insert a tree rooted at `p` with an optional parent. */
   def insertTree(fp: Fix[ProfF], parent: Option[Int] = None): ConnectionIO[Cofree[ProfF, Int]] =
@@ -121,8 +122,8 @@ object cofree extends Extras with SafeApp {
   /** Read a ProfF with the given id, yielding a ProfF that references its children by id. */
   def readFlat(id: Int): ConnectionIO[ProfF[Int]] =
     for {
-      data <- tsql"SELECT name, uni, year FROM prof WHERE id = $id".unique[(String, String, Int)]
-      kids <- tsql"SELECT id FROM prof WHERE parent = $id".as[List[Int]]
+      data <- tsql"SELECT name, uni, year FROM prof_node WHERE id = $id".unique[(String, String, Int)]
+      kids <- tsql"SELECT id FROM prof_node WHERE parent = $id".as[List[Int]]
     } yield ProfF(data._1, data._2, data._3, kids)
 
   /** Monadic cofree corecursion. */
