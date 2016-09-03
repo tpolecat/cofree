@@ -20,20 +20,16 @@
     <textarea id="source">
 
 ```tut:invisible
-import scalaz._, Scalaz._, scalaz.effect.IO
-import atto._, Atto._
+import atto._, Atto._, atto.compat.scalaz._
+import scalaz._, Scalaz.{ char => _, _ }, scalaz.effect._
 import doobie.imports._
+import doobie.contrib.postgresql.pgtypes._
+import doobie.tsql._
+import doobie.tsql.postgres._
 
-val pos: Parser[Int] = {
-  import Trampoline._
-  import Parser._
-  import Parser.Internal._
-  new Parser[Int] {
-    override def toString = "pos"
-    def apply[R](st0: State, kf: Failure[R], ks: Success[Int,R]): TResult[R] =
-      suspend(ks(st0,st0.pos))
-  }
-}
+object Extras extends Extras
+import Extras._
+
 ```
 
 class: center, middle
@@ -113,7 +109,7 @@ CREATE TABLE prof (
   parent INTEGER     NULL,
   name   VARCHAR NOT NULL,
   year   INTEGER NOT NULL,
-  FOREIGN KEY(parent) REFERENCES prof(id)        
+  FOREIGN KEY(parent) REFERENCES prof(id)
 )
 ```
 
@@ -150,7 +146,7 @@ CREATE TABLE prof (
   parent INTEGER     NULL,
   name   VARCHAR NOT NULL,
   year   INTEGER NOT NULL,
-  FOREIGN KEY(parent) REFERENCES prof(id)        
+  FOREIGN KEY(parent) REFERENCES prof(id)
 )
 ```
 
@@ -200,7 +196,7 @@ case class Prof(
 
 ???
 
-- Ok is this any better? 
+- Ok is this any better?
 - ...
 - Maybe a little bit, but I think it's irritating because you tend to have three cases:
 
@@ -303,7 +299,7 @@ case class ProfF[A](
 
 ```tut:silent:fail
 type Prof   = ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[ProfF[
-type IdProf = (Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, 
+type IdProf = (Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int, ProfF[(Int,
 ```
 
 <img align=right src="prof.png"/>
@@ -337,7 +333,7 @@ type IdProf = (Int, ProfF[IdProf])
 
 ???
 
-- what if we make the type aliases self-referential? 
+- what if we make the type aliases self-referential?
 - ok? no. doesn't compile
 - type aliases can't be recursive. but **classes** can ...
 
@@ -407,7 +403,7 @@ case class ProfF[A](
 
 ```tut:silent
 case class Prof[F[_]](value: F[Prof[F]])
-case class IdProf[F[_]](id: Int, value: F[IdProf[F]]) 
+case class IdProf[F[_]](id: Int, value: F[IdProf[F]])
 ```
 
 ???
@@ -473,7 +469,7 @@ class: center, middle
 
 ### tpolecat's law of mistaken invention:
 
-## _"Anything I invent that is sufficiently polymorphic and plausibly useful probably already exists in scalaz."_ 
+## _"Anything I invent that is sufficiently polymorphic and plausibly useful probably already exists in scalaz."_
 
 ???
 
@@ -519,7 +515,7 @@ type IdProf = Cofree[ProfF, Int]
 case class Prof(name: String, year: Int, students: List[Prof])
 
 
-val p: Prof = 
+val p: Prof =
   Prof("Hilbert", 1885, List(
     Prof("Ackermann", 1925, Nil),
     Prof("Curry", 1930, Nil),
@@ -546,7 +542,7 @@ val p: Prof =
 case class ProfF[A](name: String, year: Int, students: List[A])
 type Prof = Fix[ProfF]
 
-val p: Prof = 
+val p: Prof =
   Fix(ProfF("Hilbert", 1885, List(
     Fix(ProfF("Ackermann", 1925, Nil)),
     Fix(ProfF("Curry", 1930,Nil)),
@@ -572,7 +568,7 @@ val p: Prof =
 case class ProfF[A](name: String, year: Int, students: List[A])
 type IdProf = Cofree[ProfF, Int]
 
-val p: IdProf = 
+val p: IdProf =
   Cofree(1, ProfF("Hilbert", 1885, List(
     Cofree(2, ProfF("Ackermann", 1925, Nil)),
     Cofree(3, ProfF("Curry", 1930,Nil)),
@@ -696,7 +692,7 @@ prof(0).parseOnly(data).option
 
 ```tut:invisible
 def drawFix(fa: Fix[ProfF]): Unit = {
-  def go(fa: Fix[ProfF], indent: Int = 0): Unit = { 
+  def go(fa: Fix[ProfF], indent: Int = 0): Unit = {
     print(" " * indent)
     println(fa.unfix)
     fa.unfix.students.foreach(go(_, indent + 1))
@@ -790,7 +786,7 @@ posProf(0).parseOnly(data).option
 
 ```tut:invisible
 def drawCofree[A](fa: Cofree[ProfF, A]): Unit = {
-  def go(fa: Cofree[ProfF, A], indent: Int = 0): Unit = { 
+  def go(fa: Cofree[ProfF, A], indent: Int = 0): Unit = {
     print(" " * indent)
     println(fa.head + " :< " + fa.tail)
     fa.tail.students.foreach(go(_, indent + 1))
@@ -828,7 +824,7 @@ class: center, middle
 case class ProfF[A](name: String, year: Int, students: List[A])
 ```
 
-`ProfF` is a functor. This means we can map over it. 
+`ProfF` is a functor. This means we can map over it.
 
 ```tut:silent
 implicit val PersonFunctor: Functor[ProfF] =
@@ -926,27 +922,14 @@ Doobie is a **pure functional** (i.e., side-effect free) JDBC library for Scala.
 
 ```tut:silent
 // a transactor abstracts over connection pools and io-effect types
-val xa = DriverManagerTransactor[IO]("org.h2.Driver", "jdbc:h2:mem:test;DB_CLOSE_DELAY=-1", "sa", "")
-
-// a program to create the schema
-val create: ConnectionIO[Int] =
-  sql"""
-    CREATE TABLE prof (
-      id     INTEGER IDENTITY,
-      parent INTEGER     NULL,
-      name   VARCHAR NOT NULL,
-      year   INTEGER NOT NULL,
-      FOREIGN KEY(parent) REFERENCES prof(id)        
-    );
-  """.update.run
+val xa = DriverManagerTransactor[IO](
+  "org.postgresql.Driver",// driver
+  "jdbc:postgresql:prof", // in-memory database
+  "postgres", ""          // user, password
+)
 ```
 
-Let's init the database.
-
-```tut
-create.transact(xa).unsafePerformIO
-sql"select id from prof".query[Int].list.transact(xa).unsafePerformIO
-```
+TODO
 
 ???
 - Ok so I don't have time to explain doobie in detail, but the big idea is that Doobie programs are values. They're data. They don't "do" anything until you translate them to some target type like `IO` or `Task` and run it ("at the end of the world" as we say).
@@ -968,7 +951,7 @@ def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
 ???
 
 - Ok so here's a method that constructs a program that inserts a row into the `prof` table and yields the generated id.
-- (explain) 
+- (explain)
 - It disregards the childern entirely, which you know because of the exstential placeholder; the implementation can't do anything with the children because it doesn't even know what type they are.
 -
 
@@ -985,11 +968,11 @@ def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
 
 def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]] =
   for {
-    h <- insertNode(op, fp.unfix)       // ConnectionIO[Int] 
-    t <- fp.unfix                       // ProfF[Fix[ProfF]] 
+    h <- insertNode(op, fp.unfix)       // ConnectionIO[Int]
+    t <- fp.unfix                       // ProfF[Fix[ProfF]]
            .map(insertTree(_, Some(h))) // ProfF[ConnectionIO[Cofree[ProfF, Int]]]
            .sequence                    // ConnectionIO[ProfF[Cofree[ProfF, Int]]]
-  } yield Cofree(h, t) 
+  } yield Cofree(h, t)
 ```
 
 ???
@@ -1014,7 +997,7 @@ def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]
     h <- insertNode(op, fp.unfix)
     t <- fp.unfix
            .traverse(insertTree(_, Some(h))) // same as map + sequence
-  } yield Cofree(h, t) 
+  } yield Cofree(h, t)
 ```
 
 ???
@@ -1048,7 +1031,7 @@ def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]
   for {
     h <- insertNode(op, fp.unfix)
     t <- fp.unfix.traverse(insertTree(_, Some(h)))
-  } yield Cofree(h, t) 
+  } yield Cofree(h, t)
 ```
 
 ???
@@ -1064,15 +1047,15 @@ def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]
 
 def prof(n: Int): Parser[Fix[ProfF]] =
   for {
-    _    <- manyN(n, char(' '))   
+    _    <- manyN(n, char(' '))
     name <- stringOf(notChar(','))
-    _    <- token(char(','))      
-    year <- int                   
-    _    <- char('\n')            
-    ss   <- many(prof(n + 2))     
+    _    <- token(char(','))
+    year <- int
+    _    <- char('\n')
+    ss   <- many(prof(n + 2))
   } yield Fix(ProfF(name, year, ss))
 
-def ioDrawCofree[F[_]: Traverse, A](fa: Cofree[F, A], indent: Int = 0): IO[Unit] = 
+def ioDrawCofree[F[_]: Traverse, A](fa: Cofree[F, A], indent: Int = 0): IO[Unit] =
   for {
     _ <- IO(print(" " * indent))
     _ <- IO(println(fa.head + " :< " + fa.tail))
@@ -1300,7 +1283,7 @@ def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
 Let's read Hilbert's sub-tree (id = 32).
 
 ```tut
-val io = readTree(32).transact(xa).flatMap(c => ioDrawCofree(c))
+val io = (tsql"select id from prof where name like '%Hilbert%'".as[List[Int]].map(_.head) >>= readTree).transact(xa).flatMap(c => ioDrawCofree(c))
 io.unsafePerformIO
 ```
 

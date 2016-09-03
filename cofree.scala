@@ -112,7 +112,7 @@ object cofree extends Extras with SafeApp {
     for {
       h <- insertNode(parent, fp.unfix)
       t <- fp.unfix.traverse(insertTree(_, Some(h)))
-    } yield Cofree(h, t) 
+    } yield Cofree(h, t)
 
   ///
   /// READ
@@ -147,7 +147,7 @@ object cofree extends Extras with SafeApp {
        SELECT * FROM prof_closure WHERE id = $id
        UNION ALL SELECT p.* FROM prof_closure p, rec r
         WHERE r.id = p.parent
-      ) SELECT id, name, uni, year, students 
+      ) SELECT id, name, uni, year, students
         FROM rec;
     """.as[Int => ProfF[Int]].map(unfoldC(id)(_))
 
@@ -166,11 +166,11 @@ object cofree extends Extras with SafeApp {
   override def runc: IO[Unit] = {
 
     // Parse the data above
-    val p: Fix[ProfF] = 
+    val p: Fix[ProfF] =
       (prof(0) <~ endOfInput).parseOnly(data).option.get // yolo
 
     // Our database program
-    val action: ConnectionIO[Unit] = 
+    val action: ConnectionIO[Unit] =
       for {
 
         // insert and draw
@@ -188,12 +188,10 @@ object cofree extends Extras with SafeApp {
       } yield ()
 
     // our IO program
-    action.transact(xa) 
+    action.transact(xa)
 
   }
 
 
 
 }
-
-
