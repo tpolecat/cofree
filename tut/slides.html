@@ -29,17 +29,17 @@ import doobie.tsql.postgres._
 
 object Extras extends Extras
 import Extras._
-
+import cofree.xa
 ```
 
 class: center, middle
 
-# Fun & Games with Fix, Cofree, and Doobie!
+<h1>Pure Functional Database Programming<br>… with Fixpoint Types</h1>
 Rob Norris • `@tpolecat` • Gemini Observatory
 
 ???
 
-- I'm Rob, I'm from Portland, first time in Montréal
+- I'm Rob, thanks Jon for inviting me to speak
 - For my day job I write software for big telescopes (in Scala) but I also work on some open-source projects in support of typeful, pure functional programming in Scala. That's what I'm interested in. If **you** are interested in this kind of programming I encourage you to get involved with Typelevel because that's what we're all about.
 - I would have put a typelevel logo on the slide but i don't understand css so i gave up.
 - If you don't mid admitting it, how many of you have used scalaz or cats?
@@ -51,7 +51,7 @@ Rob Norris • `@tpolecat` • Gemini Observatory
 
 1. Gain an intuition about some simple recursive types.
 2. Gain some confidence pushing on code to see what happens.
-3. Learn how boring doobie is.
+3. Learn a little it about doobie.
 4. Do not panic.
 
 ???
@@ -827,7 +827,7 @@ case class ProfF[A](name: String, year: Int, students: List[A])
 `ProfF` is a functor. This means we can map over it.
 
 ```tut:silent
-implicit val PersonFunctor: Functor[ProfF] =
+implicit val ProfFFunctor: Functor[ProfF] =
   new Functor[ProfF] {
     def map[A, B](fa: ProfF[A])(f: A => B): ProfF[B] =
       fa.copy(students = fa.students.map(f))
@@ -858,7 +858,7 @@ case class ProfF[A](name: String, year: Int, students: List[A])
 `ProfF` is a *traversable* functor. This means we can sequence it.
 
 ```tut:silent
-implicit val PersonTraverse: Traverse[ProfF] =
+implicit val ProfFTraverse: Traverse[ProfF] =
   new Traverse[ProfF] {
     def traverseImpl[G[_]: Applicative, A, B](fa: ProfF[A])(f: A => G[B]): G[ProfF[B]] =
       fa.students.traverse(f).map(ss => fa.copy(students = ss))
@@ -913,39 +913,241 @@ class: center, middle
 
 # Can we do some SQL now?
 
-
 ---
+
 
 # Get your doobie on
 
-Doobie is a **pure functional** (i.e., side-effect free) JDBC library for Scala. See `tpolecat/doobie` for doc, presentations, etc.
-
-```tut:silent
-// a transactor abstracts over connection pools and io-effect types
-val xa = DriverManagerTransactor[IO](
-  "org.postgresql.Driver",// driver
-  "jdbc:postgresql:prof", // in-memory database
-  "postgres", ""          // user, password
-)
-```
-
-TODO
+doobie is a **pure functional** JDBC layer for Scala
+- This means no side-effects; doobie programs are **values**.
+- Built "natively" for scalaz/scalaz-stream and cats/fs2 (0.3.1-SNAPSHOT)
+- It's a Typelevel project!
+- I have stickers!
 
 ???
-- Ok so I don't have time to explain doobie in detail, but the big idea is that Doobie programs are values. They're data. They don't "do" anything until you translate them to some target type like `IO` or `Task` and run it ("at the end of the world" as we say).
-- So here ...
-- And that's about all we need to know right now.
+
+- I'm going to talk *very quickly* about what doobie is and how it works.
+- I did a talk last year at Scala by the Bay that you can find on YouTube if you want to see a more thorough explanation.
+- If you don't quite follow the next few slides don't worry about it. You'll be ok.
 
 ---
 
+
+
+# Get your doobie on
+
+Ingredients:
+- Algebras of all operations for all JDBC types.
+
+```scala
+// For example
+sealed trait ConnectionOp[A]
+
+case object Close extends ConnectionOp[Unit]
+case object Commit extends ConnectionOp[Unit]
+case class  PrepareStatement(sql: String) extends ConnectionOp[PreparedStatement]
+case object Rollback extends ConnectionOp[Unit]
+... (54 more)
+
+
+// 16 algebras in all, total of 1000 operations
+java.sql.Connection       -> ConnectionOp          58 ops
+java.sql.PrepardStatement -> PreparedStatementOp  114 ops
+java.sql.ResultSet        -> ResultSetOp          199 ops
+```
+
+???
+
+- so this defines our primitive operations; it's a 1:1 mapping of the JDBC API to ... data
+- note that these don't *do* anything; they just describe things we might *want* to do.
+
+---
+# Get your doobie on
+
+Ingredients:
+- Free monads thereof, with lifted constructors.
+
+```scala
+// 16 of these
+type ConnectionIO[A]        = Free[ConnectionOp,        A]
+type PreparedStatementIO[A] = Free[PreparedStatementOp, A]
+type ResultSetIO[A]         = Free[ResultSetOp,         A]
+
+
+// Each with lifted constructors
+val close:    ConnectionIO[Unit] = F.liftF(Close)
+val commit:   ConnectionIO[Unit] = F.liftF(Commit)
+val rollback: ConnectionIO[Unit] = F.liftF(Rollback)
+
+def prepareStatement(sql: String): ConnectionIO[PreparedStatement] =
+  F.liftF(PrepareStatement(a))
+```
+
+???
+
+- So the algebras give us our primitive operations; *this* gives us composition.
+- We can write interesting programs in terms of this `ConnectionIO` type because it's a monad. We can flatMap these things together.
+- But this is all very low-level and not particularly safe, so
+
+---
+# Get your doobie on
+
+Ingredients:
+- Resource-safe constructors for embedded sub-programs.
+
+```scala
+// Low-level API - 1:1 with JDBC, no resource management
+prepareStatement(sql: String)
+  : ConnectionIO[PreparedStatement]
+
+// High-level API - resource-safe, unleakable
+prepareStatement[A](sql: String)(k: PreparedStatementIO[A])
+  : ConnectionIO[A]
+```
+
+---
+
+- So this gives us resource safety; if we use the constructors provided by the *high*-level API we can't leak the `PreparedStatement` because we can't get a handle to it; it doesn't appear any any of the types.
+- Ok, what else?
+
+# Get your doobie on
+
+Ingredients:
+- High-level constructors for column/resultset mapping.
+
+```scala
+// Low-level API - 1:1 with JDBC
+def getString(index: Int): ResutSetIO[String]
+
+// High-level API - column vector read into product types
+def get[A: Composite](index: Int = 1): ResultSetIO[A]
+
+// ... or aggregate structure
+def list[A: Composite]: ResultSetIO[List[A]]
+```
+
+???
+
+- Composite types are derived automatically for atomic types and products thereof, so tuples, case classes, hlists, that kind of thing.
+
+---
+# Get your doobie on
+
+Ingredients:
+- `ConnectionIO` constructor via SQL literal.
+- Statement and type-mapping checked at compile-time (soon).
+
+```scala
+// Update returns the affected row count
+tsql"DELETE FROM woozle WHERE blork = 12" // ConnectionIO[Int]
+
+// Select can be mapped to many Scala types, so you specify what you want.
+tsql"SELECT blork FROM woozle".as[Vector[Int]] // ConnectionIO[Vector[Int]]
+
+// Interpolated args are safe and typechecked. Results can be streamed.
+tsql"""
+  SELECT smurf, blork
+    FROM woozle
+   WHERE fnord like $pat
+""".process[Blix] // scalaz.stream.Process[ConnectionIO, Blix]
+
+// we will see more of this
+```
+
+???
+
+- so these constructors encapsulate the most common patterns for interacting with the database and you end up not needing to think abot JDBC at all really.
+- but note that the high and low-level stuff isn't really a stratification; the types are all the same and the only difference is in which constructors you use. So you can compose high and low-level stuff together directly.
+
+---
+# Get your doobie on
+
+Ingredients:
+- Default interpreters into Kleisli arrows for any IO-like monad.
+- Just in case:
+  - `Kleisli[F[_], E, A]` is just a wrapper for `E => F[A]`
+  - `F ~> G` defines `F[A] => G[A]` for all `A`.
+
+```scala
+// Interpreter for Op type
+def interpK[M[_]: Monad: Catchable: Capture]
+  : CallableStatementOp ~> Kleisli[M, CallableStatement, ?]
+
+// Which via Free.foldMap gives us
+def transK[M[_]: Monad: Catchable: Capture]
+  : CallableStatementIO ~> Kleisli[M, CallableStatement, ?]
+
+// Or if we have the JDBC type at hand
+def trans[M[_]: Monad: Catchable: Capture](c: CallableStatement)
+  : CallableStatementIO ~> M
+
+// (for all 16 algebras)
+```
+
+???
+
+- Just in case: ... ; I don't expect you to absorb that but it might help if you review the slides later.
+- So the last one lets you use a doobie program to manipulate a JDBC resource that you already have. So this lets you integrate with existing code, which isn't always possible with other database libraries.
+
+---
+# Get your doobie on
+
+Ingredients:
+- Conveniences for `ConnectionIO`, which is the top-level effect type.
+
+```scala
+// Abastract over connection pools, data sources, and so on.
+trait Transactor[M[_]] {
+  def trans: ConnectionIO ~> M
+  def transP: Process[ConnectionIO, ?] ~> Process[M, ?]
+}
+
+// Syntax for discharging ConnectionIO
+val xa: Transactor[IO] = ...
+val cw: ConnectionIO[Woozle] = ...
+
+cw.transact(xa) // IO[Woozle] - doobie types are gone
+```
+
+???
+
+- And there's some convenience machinery to abstract over connection pools and data sources, and syntax to let you interpret a `ConnectionIO` into something you can run.
+- That's all I have time for right now, but to learn more
+
+---
+
+class: center, middle
+
+# Learn You More Doobie
+
+Presentations, Videos, Doc at `tpolecat/doobie` on GitHub
+
+Interactive Awesomeness at `scala-exercises.org` (!!!)
+
+???
+
+- ok *now* let's do some SQL
+
+---
+
+
 # Insert a Tree
+
+Recall our `ProfF` type.
+
+```scala
+case class ProfF[A](name: String, year: Int, students: List[A])
+```
+
+Construct a program to insert a `ProfF`, ignoring children, returning its generated id.
 
 ```tut:silent
 def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
-  sql"""
+  tsql"""
     INSERT INTO prof (parent, name, year)
     VALUES ($op, ${p.name}, ${p.year})
-  """.update.withUniqueGeneratedKeys("id")
+    RETURNING id
+  """.unique[Int]
 ```
 
 ???
@@ -953,19 +1155,44 @@ def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
 - Ok so here's a method that constructs a program that inserts a row into the `prof` table and yields the generated id.
 - (explain)
 - It disregards the childern entirely, which you know because of the exstential placeholder; the implementation can't do anything with the children because it doesn't even know what type they are.
--
+- I'm going to get rid of the `ProfF` definition to make some room.
 
 ---
 
 # Insert a Tree
 
+Construct a program to insert a `ProfF`, ignoring children, returning its generated id.
+
 ```tut:silent
 def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
-  sql"""
+  tsql"""
     INSERT INTO prof (parent, name, year)
     VALUES ($op, ${p.name}, ${p.year})
-  """.update.withUniqueGeneratedKeys("id")
+    RETURNING id
+  """.unique[Int]
+```
 
+???
+
+---
+
+# Insert a Tree
+
+
+Construct a program to insert a `ProfF`, ignoring children, returning its generated id.
+
+```tut:silent
+def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
+  tsql"""
+    INSERT INTO prof (parent, name, year)
+    VALUES ($op, ${p.name}, ${p.year})
+    RETURNING id
+  """.unique[Int]
+```
+
+Construct a program to insert a `Fix[ProfF]` and return an equivalent `Cofree` annotated with generated ids.
+
+```tut:silent
 def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]] =
   for {
     h <- insertNode(op, fp.unfix)       // ConnectionIO[Int]
@@ -985,13 +1212,21 @@ def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]
 
 # Insert a Tree
 
+
+Construct a program to insert a `ProfF`, ignoring children, returning its generated id.
+
 ```tut:silent
 def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
-  sql"""
+  tsql"""
     INSERT INTO prof (parent, name, year)
     VALUES ($op, ${p.name}, ${p.year})
-  """.update.withUniqueGeneratedKeys("id")
+    RETURNING id
+  """.unique[Int]
+```
 
+Construct a program to insert a `Fix[ProfF]` and return an equivalent `Cofree` annotated with generated ids.
+
+```tut:silent
 def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]] =
   for {
     h <- insertNode(op, fp.unfix)
@@ -1020,13 +1255,20 @@ implicit val PersonTraverse: Traverse[ProfF] =
   }
 ```
 
+Construct a program to insert a `ProfF`, ignoring children, returning its generated id.
+
 ```tut:silent
 def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
-  sql"""
+  tsql"""
     INSERT INTO prof (parent, name, year)
     VALUES ($op, ${p.name}, ${p.year})
-  """.update.withUniqueGeneratedKeys("id")
+    RETURNING id
+  """.unique[Int]
+```
 
+Construct a program to insert a `Fix[ProfF]` and return an equivalent `Cofree` annotated with generated ids.
+
+```tut:silent
 def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]] =
   for {
     h <- insertNode(op, fp.unfix)
@@ -1267,7 +1509,7 @@ def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
 
 # Do it work?
 
-Let's read Hilbert's sub-tree (id = 32).
+Let's read Hilbert's sub-tree ... TODO
 
 ```tut
 val io = (tsql"select id from prof where name like '%Hilbert%'".as[List[Int]].map(_.head) >>= readTree).transact(xa).flatMap(c => ioDrawCofree(c))
