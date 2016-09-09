@@ -40,26 +40,25 @@ Rob Norris • `@tpolecat` • Gemini Observatory
 ???
 
 - I'm Rob, thanks Jon for inviting me to speak
-- For my day job I write software for big telescopes (in Scala) but I also work on some open-source projects in support of typeful, pure functional programming in Scala. That's what I'm interested in. If **you** are interested in this kind of programming I encourage you to get involved with Typelevel because that's what we're all about.
-- I would have put a typelevel logo on the slide but i don't understand css so i gave up.
-- If you don't mid admitting it, how many of you have used scalaz or cats?
+- I write software for big telescopes (in Scala) and I also work on some open-source projects including a few that we'll talk about today.
+- So before we get started, if you don't mind admitting it, how many of you have used scalaz or cats?
 - So today I want to talk about some odds and ends that I think are interesting, and we'll see if you find them interesting too.
 
 ---
 
 # Goals
 
-1. Gain an intuition about some simple recursive types.
-2. Gain some confidence pushing on code to see what happens.
-3. Learn a little it about doobie.
+1. Gain an intuition about some simple **recursive types**.
+2. Learn a little bit about **doobie**, a pure functional JDBC layer for Scala.
+3. Gain some confidence pushing on code to see what happens.
 4. Do not panic.
 
 ???
 
 1. --- that's the main point of the talk. These types seem to be pretty well known in the Haskell community but not so much among Scala programmers, and they're interesting and worth knowing about.
-2. --- so, this is something I mention from time to time when I give talks and people ask me to say more about it, so I'll try to do that as well.
-3. --- Ok, so this is ostensibly a talk about database programming with doobie, which is a library I work on, but because it's a pure functional libary everything just kind of works so it's a very low-drama way to do things.
-4. --- Recursion is always mind-blowing at first. Everybody struggles with recursive functions and self-referential data, and today we're going to talk about self-referential types, which may be new to a lot of you. So remain calm, this can be hard to grasp. So I'm going to try to approach it very gradually. If it ends up being too slow for you, I apologize; if it's too fast I also apologize. But please stop me if you have questions.
+2. --- Ok, so this is a talk about database programming and we're going to use doobie, which is a library I work on, but because it's a pure functional libary that uses types in a reasonable way it's so well-behaved that we may forget we're doing database programming.
+3. --- so, this is something I mention from time to time when I give talks and people ask me to say more about it, so I'll try to do that as well.
+4. --- Recursion is always mind-blowing at first. Everybody struggles with recursive functions and self-referential data, and today we're going to talk about self-referential types, which may be new to a lot of you. So remain calm, this can be hard to grasp. I'm going to try to approach it very gradually. If it ends up being too slow for you, I apologize; if it's too fast I also apologize. But please stop me if you have questions.
 
 Ok so let's look at a recursive data type.
 
@@ -458,9 +457,37 @@ case class Cofree[F[_], A](head: A, tail: F[Cofree[F, A]])
 
 - the first is ...
 - the second is ...
-- and I'll mention here that `Cofree` (sometimes called the cofree comonad) is the dual of the `Free` monad, which everyone spent the last few years talking about at Scala conferences. Cofree is an A **and** an `F[Cofree[F, A]]` and Free is an `A` **or** an `F[Free[F,A]]`. So that's how they're related and that's where the name comes from.
-- and i'll also say that both free and cofree are really just special cases of `Fix`, and I think Greg Pfiel will have something to say about that in the talk that's coming up next.
+- and I'll mention here that `Cofree` (sometimes called the cofree comonad) is the dual of the `Free` monad, which everyone spent the last few years talking about at Scala conferences.
 
+---
+
+# Recursive Data
+
+A ~~recursive~~ data type for professors and their Ph.D. students.
+
+```tut:silent
+case class ProfF[A](
+  name: String,
+  year: Int,
+  students: List[A]
+)
+```
+
+```tut:silent
+case class Fix[F[_]](unfix: F[Fix[F]])
+case class Cofree[F[_], A](head: A, tail: F[Cofree[F, A]])
+```
+
+Related:
+
+```tut:silent
+case class Free[F[_], A](resume: A \/ F[Free[F, A]])
+```
+
+???
+
+- Cofree is an A **and** an `F[Cofree[F, A]]` and Free is an `A` **or** an `F[Free[F,A]]`. So that's how they're related and that's where the name comes from.
+- and i'll also say that both free and cofree can be defined in terms of Fix; they're also fixpoint types.
 - but this illustrates what I mean about pushing on code. if you push hard enough sometimes it disappears entirely, because:
 
 ---
@@ -473,7 +500,9 @@ class: center, middle
 
 ???
 
-- But in this case both scalaz and cats provide `Cofree` and neither provides `Fix`.
+- But in this case both scalaz and cats provide `Free` and `Cofree` and neither provides `Fix`.
+- It's worth noting that the implementations in cats and scalaz are much more complicated than what we have here, due to strictness and stack safety; you want to be able to define free/cofree structures that are very large (or even infinite) and you want to be able to traverse them without running out of stack space. Which is a recurring story in the history of FP in scala but that's how it goes.
+- In any case it's unfortunate because the complexity of the implementation obscures the simplicity of the concepts. In any case it's a fun exercise to take that totally trivial free and build it out util you can write a little DSL and interpreter like everyone likes to do these days.
 - Ok so now that we know about the general types we can define `Prof` and `ProfF` trivially.
 
 ---
