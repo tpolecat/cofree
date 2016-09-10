@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Title</title>
+    <title>tpolecat - Pure Functional Database Programming … with Fixpoint Types</title>
     <meta charset="utf-8">
     <style>
       @import url(https://fonts.googleapis.com/css?family=Yanone+Kaffeesatz);
@@ -432,7 +432,20 @@ case class IdProf[F[_], A](id: A, value: F[IdProf[F, A]])
 
 - and we had to add the `A` to the type argument here since `IdProf` now has two type parameters.
 - Ok, so what do we have now? We have two recursive types that are totally generic; the first one can make any `F` recursive, and the second can make any `F` recursive *and* annotate each value with some arbitrary label.
-- It turns out these are well-known types.
+- So we have invented something here that's totally generic and potentially really useful.
+
+---
+
+class: center, middle
+
+### tpolecat's law of mistaken invention:
+
+## _"Anything I invent that is sufficiently polymorphic and plausibly useful probably already exists in scalaz."_
+
+???
+
+- so when this happens take a step back and see if it's already a thing. Because honestly it's usually already a thing.
+- and it's half-true in this case. It turns out that both of these types are well known.
 
 ---
 
@@ -455,9 +468,104 @@ case class Cofree[F[_], A](head: A, tail: F[Cofree[F, A]])
 
 ???
 
-- the first is ...
-- the second is ...
-- and I'll mention here that `Cofree` (sometimes called the cofree comonad) is the dual of the `Free` monad, which everyone spent the last few years talking about at Scala conferences.
+- the first one is called `Fix` and it gives us this fixpoint for any `F`. It lets us write down the infinite type in a finite way.
+- the second one is called `Cofree` and it does the same thing but associates an arbitrary annotation with each value. This one exists in scalaz and cats. `Fix` doesn't, I don't know.
+- ... and while we're at it I'll mention another data type that's related.
+
+---
+
+# Recursive Data
+
+A ~~recursive~~ data type for professors and their Ph.D. students.
+
+```tut:silent
+case class ProfF[A](
+  name: String,
+  year: Int,
+  students: List[A]
+)
+```
+
+```tut:silent
+case class Fix[F[_]](unfix: F[Fix[F]])
+case class Cofree[F[_], A](head: A, tail: F[Cofree[F, A]])
+case class Hmmm[F[_], A](hmmmmmm: A \/ F[Hmmm[F, A]])
+```
+
+???
+
+- This is just like `Cofree` but instead of an `A` and an `F` it has an `A` *or* an `F`.
+- Does anyone know what we call this one?
+
+---
+
+# Recursive Data
+
+A ~~recursive~~ data type for professors and their Ph.D. students.
+
+```tut:silent
+case class ProfF[A](
+  name: String,
+  year: Int,
+  students: List[A]
+)
+```
+
+```tut:silent
+case class Fix[F[_]](unfix: F[Fix[F]])
+case class Cofree[F[_], A](head: A, tail: F[Cofree[F, A]])
+case class Free[F[_], A](resume: A \/ F[Free[F, A]])
+```
+
+???
+
+- Right, so this is `Free`. In the same way you think of cofree as a structure with annotations at each node, free is a structure with annotations at the leaves. So they're categorical duals: and and or.
+- `Free` is commonly called the free *monad* because it's a monad if `F` is a functor, add `Cofree` is a *comonad* if `F` is a functor.
+
+- It's worth noting that the implementations in cats and scalaz are much more complicated than what we have here, due to strictness and stack safety; you want to be able to define free/cofree structures that are very large (or even infinite), but because they can be arbitrarily big you need to be able to traverse them without running out of stack space. So that's the source of complication. In Haskell they're defined just like this. They're both one-liners. Like, half a line.
+
+- In any case it's unfortunate because the complexity of the implementation obscures the simplicity of the concepts. It's a fun and useful exercise to take that totally trivial free monad (for instance) and build it out util you can write a little DSL and interpreter like everyone likes to do these days. It will be finite and stack limited but it'll work. And you will feel awesome.
+
+- Ok, so I want to do a couple more things before we move on.
+
+  - So the first is that if we have a `Fix` we can always get an `F` out by calling `.unfix`, and we can do that with `Cofree` by calling `.tail`. The general name for this operation is `project` and data types that do this are called *recursive* types.
+  - And note that we can't do it with `Free` because you might not have an `F`; you might have an `A`. But you can always go the *other* way. If you have the `F` you can construct a `Free`. Same with `Fix`. But you can't do this with `Cofree` because you also need an `A`. So this operation (the dual) is called `embed` and data types with ths behavior are *corecursive* types.
+  - So `Cofree` is a recursive type and `Free` is a corecursive type, and `Fix` is both.
+  - And SlamData open-sourced a library called Matryoshka, primarily by Greg Pfiel, that has typeclasses for Recursive and Corecursive and *tons* of operations you get for free by recognizing this as an abstraction. It is an absolutely amazing library and if you look at it you will become obsessed. I will give a link to that at the end of the talk.
+
+- So, the second thing I want to point out is that `Free` and `Cofree` are also fixpoint types. We can do the same trick we did with `Prof` and factor out the recursion.
+
+---
+
+# Recursive Data
+
+A ~~recursive~~ data type for professors and their Ph.D. students.
+
+```tut:silent
+case class ProfF[A](
+  name: String,
+  year: Int,
+  students: List[A]
+)
+```
+
+```tut:silent
+case class Fix[F[_]](unfix: F[Fix[F]])
+case class Cofree[F[_], A](head: A, tail: F[Cofree[F, A]])
+case class Free[F[_], A](resume: A \/ F[Free[F, A]])
+```
+
+```tut:silent
+case class CofreeF[F[_], A, B](head: A, tail: F[B])
+case class FreeF[F[_], A, B](resume: A \/ F[B])
+
+type Cofree[F[_], A] = Fix[CofreeF[F, A, ?]]
+type Free[F[_], A] = Fix[FreeF[F, A, ?]]
+```
+
+???
+
+- Ok so now that we know about the general types we can define `Prof` and `ProfF` trivially.
 
 ---
 
@@ -489,21 +597,6 @@ case class Free[F[_], A](resume: A \/ F[Free[F, A]])
 - Cofree is an A **and** an `F[Cofree[F, A]]` and Free is an `A` **or** an `F[Free[F,A]]`. So that's how they're related and that's where the name comes from.
 - and i'll also say that both free and cofree can be defined in terms of Fix; they're also fixpoint types.
 - but this illustrates what I mean about pushing on code. if you push hard enough sometimes it disappears entirely, because:
-
----
-
-class: center, middle
-
-### tpolecat's law of mistaken invention:
-
-## _"Anything I invent that is sufficiently polymorphic and plausibly useful probably already exists in scalaz."_
-
-???
-
-- But in this case both scalaz and cats provide `Free` and `Cofree` and neither provides `Fix`.
-- It's worth noting that the implementations in cats and scalaz are much more complicated than what we have here, due to strictness and stack safety; you want to be able to define free/cofree structures that are very large (or even infinite) and you want to be able to traverse them without running out of stack space. Which is a recurring story in the history of FP in scala but that's how it goes.
-- In any case it's unfortunate because the complexity of the implementation obscures the simplicity of the concepts. In any case it's a fun exercise to take that totally trivial free and build it out util you can write a little DSL and interpreter like everyone likes to do these days.
-- Ok so now that we know about the general types we can define `Prof` and `ProfF` trivially.
 
 ---
 
@@ -1141,20 +1234,7 @@ cw.transact(xa) // IO[Woozle] - doobie types are gone
 ???
 
 - And there's some convenience machinery to abstract over connection pools and data sources, and syntax to let you interpret a `ConnectionIO` into something you can run.
-- That's all I have time for right now, but to learn more
-
----
-
-class: center, middle
-
-# Learn You More Doobie
-
-Presentations, Videos, Doc at `tpolecat/doobie` on GitHub
-
-Interactive Awesomeness at `scala-exercises.org` (!!!)
-
-???
-
+- That's all I have time for right now, but I'll link to some resources at the end.
 - ok *now* let's do some SQL
 
 ---
@@ -1574,9 +1654,21 @@ io.unsafePerformIO
 class: center, middle
 
 # Thanks!
-Code and slides at `tpolecat/cofree` on GitHub
 
-## Questions?
+Rob Norris • @tpolecat
+
+I will tweet a link to slides and code (not up yet, sorry).
+
+## Learn You a Recursion Scheme
+
+`slamdata/matryoshka` and `sellout/recursion-scheme-talk` on github
+
+## Learn You a Doobie
+
+Presentations, Videos, Doc at `tpolecat/doobie` on GitHub
+
+Interactive Awesomeness at `scala-exercises.org` (!!!)
+
 
 
 
