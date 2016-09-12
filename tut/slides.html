@@ -35,7 +35,10 @@ import cofree.xa
 class: center, middle
 
 <h1>Pure Functional Database Programming<br>… with Fixpoint Types</h1>
+
 Rob Norris • `@tpolecat` • Gemini Observatory
+
+12 Sep 2016 • The Jon Pretty Experience
 
 ???
 
@@ -55,10 +58,10 @@ Rob Norris • `@tpolecat` • Gemini Observatory
 
 ???
 
-1. --- that's the main point of the talk. These types seem to be pretty well known in the Haskell community but not so much among Scala programmers, and they're interesting and worth knowing about.
-2. --- Ok, so this is a talk about database programming and we're going to use doobie, which is a library I work on, but because it's a pure functional libary that uses types in a reasonable way it's so well-behaved that we may forget we're doing database programming.
+1. --- These types seem to be pretty well known in the Haskell community but not so much among Scala programmers, and they're interesting and worth knowing about.
+2. ---
 3. --- so, this is something I mention from time to time when I give talks and people ask me to say more about it, so I'll try to do that as well.
-4. --- Recursion is always mind-blowing at first. Everybody struggles with recursive functions and self-referential data, and today we're going to talk about self-referential types, which may be new to a lot of you. So remain calm, this can be hard to grasp. I'm going to try to approach it very gradually. If it ends up being too slow for you, I apologize; if it's too fast I also apologize. But please stop me if you have questions.
+4. --- Recursion is always mind-blowing at first. Everybody struggles with recursive functions and inductive data types at first, and today we're going to talk about self-referential types, which might be hard to grasp at first. This is ok. I'm going to try to approach it very gradually. If it ends up being too slow for you, I apologize; if it's too fast I also apologize. But please stop me if you have questions.
 
 Ok so let's look at a recursive data type.
 
@@ -116,8 +119,8 @@ CREATE TABLE prof (
 
 - Here's how you normally want to do it.
 - ...
-- You have the child refer to its parent, so the relationship is inverted.
-- But before we get to the parent-child relationship we need to talk about how we're going to represent the id on the Scala side.
+- You have the child refer to its parent, so the relationship is inverted. So we need to figure out how to manage that difference.
+- And you also have this id to deal with, and we need a way to represent the id on the Scala side, so let's talk about that first.
 - Ok so here's one possibility.
 
 ---
@@ -231,8 +234,7 @@ type IdProf = (Int, Prof)
 ???
 
 - ... Which defeats the purpose of externalizing the ids … the whole point was to not have to talk about them in the model.
-
-So let's try something else. Let's parameterize it on the child type.
+- Ok so when you have a problem like this where you can't figure out what type to use, sometimes it helps to just make it a parameter. So let's try that.
 
 ---
 
@@ -411,7 +413,7 @@ case class IdProf[F[_], A](id: A, value: F[IdProf[F, A]])
 
 - and we had to add the `A` to the type argument here since `IdProf` now has two type parameters.
 - Ok, so what do we have now? We have two recursive types that are totally generic; the first one can make any `F` recursive, and the second can make any `F` recursive *and* annotate each value with some arbitrary label.
-- So we have invented something here that's totally generic and potentially really useful.
+- So we have invented something here that's totally generic and potentially really useful, and when this happens I always become suspicious.
 
 ---
 
@@ -498,7 +500,7 @@ case class Free[F[_], A](resume: A \/ F[Free[F, A]])
 
 ???
 
-- Right, so this is `Free`. In the same way you think of cofree as a structure with annotations at each node, free is a structure with annotations at the leaves. So they're categorical duals: and and or.
+- Right, so this is `Free`. In the same way you think of cofree as a structure with labels at each node, free is a structure with labels at the leaves.
 - `Free` is commonly called the free *monad* because it's a monad if `F` is a functor, add `Cofree` is a *comonad* if `F` is a functor.
 
 - It's worth noting that the implementations in cats and scalaz are more complicated than what we have here, because to strictness and stack safety; you want to be able to define free/cofree structures that are very large (or even infinite) so they need to be lazt. And then because they can be arbitrarily big you need a way to traverse them without running out of stack space. So that's the source of complication. In Haskell they're defined just like this. They're both one-liners. Like, half a line.
@@ -511,7 +513,7 @@ case class Free[F[_], A](resume: A \/ F[Free[F, A]])
   - So the first is that if we have a `Fix` we can always get an `F` out by calling `.unfix`, and we can do that with `Cofree` by calling `.tail`. The general name for this operation is `project` and data types that do this are called *recursive* types.
   - And note that we can't do it with `Free` because you might not have an `F`; you might have an `A`. But you can always go the *other* way. If you have the `F` you can construct a `Free`. Same with `Fix`. But you can't do this with `Cofree` because you also need an `A`. So this operation (the dual) is called `embed` and data types with ths behavior are *corecursive* types.
   - So `Cofree` is a recursive type and `Free` is a corecursive type, and `Fix` is both.
-  - And SlamData open-sourced a library called Matryoshka, primarily by Greg Pfiel, that has typeclasses for Recursive and Corecursive and *tons* of operations you get for free by recognizing this as an abstraction. It is an absolutely amazing library and if you look at it you will become obsessed. I will give a link to that at the end of the talk.
+  - And on this basis you can introduce abstractions for recursive and corecursive types that give you tons and tons of operations for free. There's a library called Matryoskha that does this, and it's an amazing library. ...
   - So some of the things I'm going to derive later in the talk are free if you use Matryoshka.
 
 - So, the second thing I want to point out is that `Free` and `Cofree` are also fixpoint types. We can do the same trick we did with `Prof` and factor out the recursion.
@@ -874,9 +876,6 @@ posProf(0).parseOnly(data).option.foreach(drawCofree)
 - So our original idea for `Cofree` was for database IDs but we can use that slot for anything. Without any changes to our API we now have a representation with source positions.
 - And you can see how this can be really useful for something like a computer language, because your recursive data type is an AST that you might want to annotate with source positions, types, strictness analysis, any number of things, and by encoding your data types this way you get that ability for free, which is really nice.
 
-- Ok, so back to our database problem.
-
-
 ---
 
 class: center, middle
@@ -885,7 +884,7 @@ class: center, middle
 
 ???
 
-- Ok so before we do that I need to explain something that you may have been wondering about.
+- Ok so before we get back to our database problem I need to explain something that you may have been wondering about.
 
 ---
 
@@ -915,7 +914,7 @@ ps.map(s => s.length)
 ???
 
 - ProfF is a functor. This means we can map over it.
-- And if you follow this design pattern your data type will *always* be a functor, in fact it's called a pattern functor, so that's the thing to google if you want to learn more about this kind of thing.
+- And if you follow this design pattern your data type will *always* be a functor, and we call it a *pattern functor*. ProfF is the pattern functor for Prof and IdProf; they differ in the recursive structure that we're applying.
 - In any case the functor here is straightforward because we can just delegate to `.map` on `List` and we're done.
 
 ---
@@ -945,15 +944,17 @@ p.sequence
 
 ???
 
-- It turns out that `ProfF` is also a **traversable** functor. This isn't always the case but it's often the case, and when you can define traverse you should do so.
-- So this means we can turn a `ProfF[F[A]]` into a `F[ProfF[A]]` if `F` is an applicative functor. We can flip the type constructors, which is what the example illustrates. Look at the types.
+- It turns out that `ProfF` is a **traversable** functor, which is even better.
+- This means we can `sequence` it, which lets us turn a `ProfF[G[A]]` into a `G[ProfF[A]]` if `G` is an applicative functor. We can flip the type constructors, which is what the example illustrates. Look at the types.
+- If you're not familiar with traversable functors take the time to learn about them; you really can't do monadic programming without them.
 - The implementation is a little more involved but again we just delegate to `traverse` on `List` for most of the work because `List` is also a traversable functor.
+- Ok so we defined `traverse` but the operation I showed you is called `sequence`, so what's the relationship.
 
 ---
 
 # But wait, there's more!
 
-Because "map and then sequence" is so common, we also have `traverse` which does them in one step. You can define one in terms of the other but they have this relationship:
+Because "map and then sequence" is so common, we define `traverse` which does them in one step. You can define one in terms of the other but they have this relationship:
 
 ```scala
 fa.map(f).sequence <~> fa.traverse(f) // definition of traverse
@@ -985,6 +986,10 @@ class: center, middle
 
 # Pure Functional Database Programming
 
+???
+
+- Let's talk about doobie.
+
 ---
 
 # Get your doobie on
@@ -1000,8 +1005,8 @@ doobie is a **pure functional** JDBC layer for Scala
 
 ???
 
-- I'm going to talk *very quickly* about what doobie is and how it works.
-- I lose you don't worry, I did a talk last year at Scala by the Bay that you can find on YouTube if you want to see a more thorough explanation.
+- I had ten slides about doobie, but I decided that's not enough if you're not familiar with free monads and monadic programming, and too much if you do; so I'm just going to give you the executive summary and I'll link you to a pretty good video at the end of the talk.
+- In the end I don't think it's going to matter. If I introduce a type you don't understand please stop me and I'll explain it.
 
 ---
 
@@ -1014,7 +1019,17 @@ Ingredients, the TL;DR version:
 - Lifting operation for composing programs written in different languages.
 - Interpreters into Kleisli arrows for IO-like data types.
 
+???
+
+- Primitives
+- Composition
+- Embedding
+- Semantics
+
+Still relatively low-level; this is just a pure functional way to write raw JDBC, so we improve on that with some higher-level constructors.
+
 ---
+
 
 # Get your doobie on
 
@@ -1031,6 +1046,10 @@ Derived constructors:
 - Resource-safe constructors for embedded sub-programs.
 - Composite column vector operations via typeclass-based mapping.
 - Compile-time checked SQL literals. (New!)
+
+???
+
+These are all built on top of the low-level stuff; there's no ugly plumbing layer and no new types. You can mix high and low-level code all you like.
 
 ---
 
@@ -1244,8 +1263,9 @@ def readNode(id: Int): ConnectionIO[ProfF[Int]] =
 
 ???
 
-- ok so what does this mean?
-- I should acknowledge that this is a very inefficient way to do this; it would be much faster to read the whole thing into memory and assemble the tree locally, but this is easier to follow and ends up being a better example.
+- ok so what does this mean? one level and stop
+- I should acknowledge that this is a very inefficient way to do this; it would be much faster to read the whole thing into memory and assemble the tree locally, but that pushes all the complexity into the SQL which isn't very interesting. But there is a fast version in the sample code.
+- what if we want two levels?
 
 ---
 
@@ -1322,7 +1342,7 @@ def readK(id: Int): Fix[Three] =
 
 ???
 
-- We can write a typeclass that's indexed by a natural number representing the depth, so we're not fixed at two or three or whatever.
+- We can write a typeclass that's indexed by a natural number representing the depth, so we're not fixed at two or three or whatever, and that's in the sample code as well.
 - But what we really want to do here is read the whole thing, so let's get back to that.
 
 
@@ -1574,13 +1594,22 @@ def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
 
 # Does it work?
 
-Let's read Hilbert's sub-tree ... URGH, make this better.
+Let's read Hilbert's sub-tree.
+
+```tut:silent
+val hilbert: ConnectionIO[Int] =
+  tsql"""
+    select max(id) -- sorry
+    from prof
+    where name like '%Hilbert'
+  """.unique[Int]
+
+val io: IO[Cofree[ProfF, Int]] =
+  (hilbert flatMap readTree).transact(xa)
+```
 
 ```tut
-val hilbert = tsql"select max(id) from prof where name like '%Hilbert'".unique[Int]
-
-val io = (hilbert flatMap readTree).transact(xa).flatMap(ioDrawCofree(_))
-io.unsafePerformIO
+io.flatMap(ioDrawCofree(_)).unsafePerformIO
 ```
 
 ???
