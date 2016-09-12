@@ -128,7 +128,7 @@ A recursive data type for professors and their Ph.D. students.
 
 ```tut:silent
 case class Prof(
-  id : Int @@ Prof,
+  id : Int,
   name: String,
   year: Int,
   students: List[Prof]
@@ -152,29 +152,8 @@ CREATE TABLE prof (
 ???
 
 - ...
-- So we would probably use a tagged type or something to store this, but just for simplicity I'm going to use a plan `Int`.
-- Also going to get rid of the table definition for now.
-
----
-
-# Recursive Data
-
-A recursive data type for professors and their Ph.D. students.
-
-```tut:silent
-case class Prof(
-  id : Int,
-  name: String,
-  year: Int,
-  students: List[Prof]
-)
-```
-
-<img align=right src="prof.png"/>
-
-???
-
 - Ok so what's wrong with this representatoin for IDs? (new objects)
+- Also going to get rid of the table definition for now.
 
 ---
 
@@ -445,7 +424,7 @@ class: center, middle
 ???
 
 - so when this happens take a step back and see if it's already a thing. Because honestly it's usually already a thing.
-- and it's half-true in this case. It turns out that both of these types are well known.
+- It turns out that both of these types are well known.
 
 ---
 
@@ -522,9 +501,10 @@ case class Free[F[_], A](resume: A \/ F[Free[F, A]])
 - Right, so this is `Free`. In the same way you think of cofree as a structure with annotations at each node, free is a structure with annotations at the leaves. So they're categorical duals: and and or.
 - `Free` is commonly called the free *monad* because it's a monad if `F` is a functor, add `Cofree` is a *comonad* if `F` is a functor.
 
-- It's worth noting that the implementations in cats and scalaz are much more complicated than what we have here, due to strictness and stack safety; you want to be able to define free/cofree structures that are very large (or even infinite), but because they can be arbitrarily big you need to be able to traverse them without running out of stack space. So that's the source of complication. In Haskell they're defined just like this. They're both one-liners. Like, half a line.
+- It's worth noting that the implementations in cats and scalaz are more complicated than what we have here, because to strictness and stack safety; you want to be able to define free/cofree structures that are very large (or even infinite) so they need to be lazt. And then because they can be arbitrarily big you need a way to traverse them without running out of stack space. So that's the source of complication. In Haskell they're defined just like this. They're both one-liners. Like, half a line.
 
-- In any case it's unfortunate because the complexity of the implementation obscures the simplicity of the concepts. It's a fun and useful exercise to take that totally trivial free monad (for instance) and build it out util you can write a little DSL and interpreter like everyone likes to do these days. It will be finite and stack limited but it'll work. And you will feel awesome.
+- In any case it's unfortunate because the complexity of the implementation makes them hard to understanc. You have to squint to see it, especially with `Free`.
+- It's a fun and useful exercise to take that totally trivial free monad (for instance) and build it out util you can write a little DSL and interpreter like everyone likes to do these days. It will be finite and stack limited but it'll work. And you will feel awesome.
 
 - Ok, so I want to do a couple more things before we move on.
 
@@ -532,6 +512,7 @@ case class Free[F[_], A](resume: A \/ F[Free[F, A]])
   - And note that we can't do it with `Free` because you might not have an `F`; you might have an `A`. But you can always go the *other* way. If you have the `F` you can construct a `Free`. Same with `Fix`. But you can't do this with `Cofree` because you also need an `A`. So this operation (the dual) is called `embed` and data types with ths behavior are *corecursive* types.
   - So `Cofree` is a recursive type and `Free` is a corecursive type, and `Fix` is both.
   - And SlamData open-sourced a library called Matryoshka, primarily by Greg Pfiel, that has typeclasses for Recursive and Corecursive and *tons* of operations you get for free by recognizing this as an abstraction. It is an absolutely amazing library and if you look at it you will become obsessed. I will give a link to that at the end of the talk.
+  - So some of the things I'm going to derive later in the talk are free if you use Matryoshka.
 
 - So, the second thing I want to point out is that `Free` and `Cofree` are also fixpoint types. We can do the same trick we did with `Prof` and factor out the recursion.
 
@@ -565,41 +546,11 @@ type Free[F[_], A] = Fix[FreeF[F, A, ?]]
 
 ???
 
-- Ok so now that we know about the general types we can define `Prof` and `ProfF` trivially.
+- So `Fix` is the primitive structure here.
+- Alright, enough of that.
+- Ok so now that we know about the general types we can define `Prof` and `IdProf` trivially.
 
 ---
-
-# Recursive Data
-
-A ~~recursive~~ data type for professors and their Ph.D. students.
-
-```tut:silent
-case class ProfF[A](
-  name: String,
-  year: Int,
-  students: List[A]
-)
-```
-
-```tut:silent
-case class Fix[F[_]](unfix: F[Fix[F]])
-case class Cofree[F[_], A](head: A, tail: F[Cofree[F, A]])
-```
-
-Related:
-
-```tut:silent
-case class Free[F[_], A](resume: A \/ F[Free[F, A]])
-```
-
-???
-
-- Cofree is an A **and** an `F[Cofree[F, A]]` and Free is an `A` **or** an `F[Free[F,A]]`. So that's how they're related and that's where the name comes from.
-- and i'll also say that both free and cofree can be defined in terms of Fix; they're also fixpoint types.
-- but this illustrates what I mean about pushing on code. if you push hard enough sometimes it disappears entirely, because:
-
----
-
 
 # Recursive Data
 
@@ -654,7 +605,6 @@ val p: Prof =
 ???
 
 - Here is our original recursive data type and a construction. Nothing fancy here.
-- Ok point out how much awesomeness is in this tree.
 
 ---
 
@@ -724,7 +674,7 @@ class: center, middle
 
 ---
 
-# Parse Positions
+# Programming with Fix and Cofree
 
 ```tut:silent
 case class ProfF[A](name: String, year: Int, students: List[A])
@@ -758,7 +708,7 @@ So, here's some sample data that we want to parse into our fixpoint types. You m
 
 ---
 
-# Parse Positions
+# Programming with Fix and Cofree
 
 ```tut:invisible
 case class ProfF[A](name: String, year: Int, students: List[A]) {
@@ -780,12 +730,11 @@ def prof(n: Int): Parser[Fix[ProfF]] =
 
 ???
 
-- And here's one way to do it. This is written with `atto` which is a parsing library I work on but it would look the same with Li Haoyi's Fastparse or pretty much any monadic parser combinator library.
-- <explain it>
+- And here's one way to do it. This is written with `atto` which is a parsing library I work on but it would look basically the same with Fastparse or pretty much any monadic parser combinator library.
 
 ---
 
-# Parse Positions
+# Programming with Fix and Cofree
 
 ```tut:silent
 def prof(n: Int): Parser[Fix[ProfF]] =
@@ -810,7 +759,7 @@ prof(0).parseOnly(data).option
 
 ---
 
-# Parse Positions
+# Programming with Fix and Cofree
 
 ```tut:invisible
 def drawFix(fa: Fix[ProfF]): Unit = {
@@ -834,7 +783,7 @@ prof(0).parseOnly(data).option.foreach(drawFix)
 
 ---
 
-# Parse Positions
+# Programming with Fix and Cofree
 
 ```tut:silent
 def prof(n: Int): Parser[Fix[ProfF]] =
@@ -856,7 +805,7 @@ def prof(n: Int): Parser[Fix[ProfF]] =
 
 ---
 
-# Parse Positions
+# Programming with Fix and Cofree
 
 ```tut:silent
 def posProf(n: Int): Parser[Cofree[ProfF, (Int, Int)]] =
@@ -878,7 +827,7 @@ def posProf(n: Int): Parser[Cofree[ProfF, (Int, Int)]] =
 
 ---
 
-# Parse Positions
+# Programming with Fix and Cofree
 
 ```tut:silent
 def posProf(n: Int): Parser[Cofree[ProfF, (Int, Int)]] =
@@ -904,7 +853,7 @@ posProf(0).parseOnly(data).option
 
 ---
 
-# Parse Positions
+# Programming with Fix and Cofree
 
 ```tut:invisible
 def drawCofree[A](fa: Cofree[ProfF, A]): Unit = {
@@ -932,7 +881,7 @@ posProf(0).parseOnly(data).option.foreach(drawCofree)
 
 class: center, middle
 
-# Ok, not quite yet. Almost.
+# Fistful of Functors
 
 ???
 
@@ -996,28 +945,29 @@ p.sequence
 
 ???
 
-- It turns out that `ProfF` is also a **traversable** functor. This means we can turn a `ProfF[F[A]]` into a `F[ProfF[A]]` if `F` is an applicative functor. We can flip the type constructors, which is what the example illustrates. Look at the types.
+- It turns out that `ProfF` is also a **traversable** functor. This isn't always the case but it's often the case, and when you can define traverse you should do so.
+- So this means we can turn a `ProfF[F[A]]` into a `F[ProfF[A]]` if `F` is an applicative functor. We can flip the type constructors, which is what the example illustrates. Look at the types.
 - The implementation is a little more involved but again we just delegate to `traverse` on `List` for most of the work because `List` is also a traversable functor.
 
 ---
 
-# (small digression)
+# But wait, there's more!
 
 Because "map and then sequence" is so common, we also have `traverse` which does them in one step. You can define one in terms of the other but they have this relationship:
 
 ```scala
-fa.map(f).sequence <~> fa.traverse(f) // (1) definition of traverse
+fa.map(f).sequence <~> fa.traverse(f) // definition of traverse
 ```
 
 And we can find another identity by equational reasoning.
 
 ```scala
 
-fa          <~> fa.map(identity)          // (2) the functor law
+fa          <~> fa.map(identity)          // the functor law
 
-fa.sequence <~> fa.map(identity).sequence // by (2) above
+fa.sequence <~> fa.map(identity).sequence // sequence both sides
 
-fa.sequence <~> fa.traverse(identity)     // by (1) above
+fa.sequence <~> fa.traverse(identity)     // definition of traverse
 ```
 
 So when you're working with traversable functors it's nice to know both of those substitutions.
@@ -1033,212 +983,62 @@ So when you're working with traversable functors it's nice to know both of those
 
 class: center, middle
 
-# Can we do some SQL now?
+# Pure Functional Database Programming
 
 ---
-
 
 # Get your doobie on
 
 doobie is a **pure functional** JDBC layer for Scala
-- This means no side-effects; doobie programs are **values**.
-- Built "natively" for scalaz/scalaz-stream and cats/fs2 (0.3.1-SNAPSHOT)
+
+- No side-effects. doobie programs are **values**.
+- Built natively for scalaz/scalaz-stream *and* cats/fs2.
 - It's a Typelevel project!
 - I have stickers!
+
+<img src="doobie_logo.svg" align="right">
 
 ???
 
 - I'm going to talk *very quickly* about what doobie is and how it works.
-- I did a talk last year at Scala by the Bay that you can find on YouTube if you want to see a more thorough explanation.
-- If you don't quite follow the next few slides don't worry about it. You'll be ok.
+- I lose you don't worry, I did a talk last year at Scala by the Bay that you can find on YouTube if you want to see a more thorough explanation.
 
 ---
 
-
-
 # Get your doobie on
 
-Ingredients:
+Ingredients, the TL;DR version:
+
 - Algebras of all operations for all JDBC types.
-
-```scala
-// For example
-sealed trait ConnectionOp[A]
-
-case object Close extends ConnectionOp[Unit]
-case object Commit extends ConnectionOp[Unit]
-case class  PrepareStatement(sql: String) extends ConnectionOp[PreparedStatement]
-case object Rollback extends ConnectionOp[Unit]
-... (54 more)
-
-
-// 16 algebras in all, total of 1000 operations
-java.sql.Connection       -> ConnectionOp          58 ops
-java.sql.PrepardStatement -> PreparedStatementOp  114 ops
-java.sql.ResultSet        -> ResultSetOp          199 ops
-```
-
-???
-
-- so this defines our primitive operations; it's a 1:1 mapping of the JDBC API to ... data
-- note that these don't *do* anything; they just describe things we might *want* to do.
+- Free monads thereof; 16 little languages with 1000 operations.
+- Lifting operation for composing programs written in different languages.
+- Interpreters into Kleisli arrows for IO-like data types.
 
 ---
+
 # Get your doobie on
 
-Ingredients:
-- Free monads thereof, with lifted constructors.
+Ingredients, the TL;DR version:
 
-```scala
-// 16 of these
-type ConnectionIO[A]        = Free[ConnectionOp,        A]
-type PreparedStatementIO[A] = Free[PreparedStatementOp, A]
-type ResultSetIO[A]         = Free[ResultSetOp,         A]
+- Algebras of all operations for all JDBC types.
+- Free monads thereof; 16 little languages with 1000 operations.
+- Lifting operation for composing programs written in different languages.
+- Interpreters into Kleisli arrows for IO-like data types.
 
+Derived constructors:
 
-// Each with lifted constructors
-val close:    ConnectionIO[Unit] = F.liftF(Close)
-val commit:   ConnectionIO[Unit] = F.liftF(Commit)
-val rollback: ConnectionIO[Unit] = F.liftF(Rollback)
-
-def prepareStatement(sql: String): ConnectionIO[PreparedStatement] =
-  F.liftF(PrepareStatement(a))
-```
-
-???
-
-- So the algebras give us our primitive operations; *this* gives us composition.
-- We can write interesting programs in terms of this `ConnectionIO` type because it's a monad. We can flatMap these things together.
-- But this is all very low-level and not particularly safe, so
-
----
-# Get your doobie on
-
-Ingredients:
+- Typesafe versions of JDBC operations that use `Int` constants.
 - Resource-safe constructors for embedded sub-programs.
-
-```scala
-// Low-level API - 1:1 with JDBC, no resource management
-prepareStatement(sql: String)
-  : ConnectionIO[PreparedStatement]
-
-// High-level API - resource-safe, unleakable
-prepareStatement[A](sql: String)(k: PreparedStatementIO[A])
-  : ConnectionIO[A]
-```
+- Composite column vector operations via typeclass-based mapping.
+- Compile-time checked SQL literals. (New!)
 
 ---
 
-- So this gives us resource safety; if we use the constructors provided by the *high*-level API we can't leak the `PreparedStatement` because we can't get a handle to it; it doesn't appear any any of the types.
-- Ok, what else?
+class: center, middle
 
-# Get your doobie on
-
-Ingredients:
-- High-level constructors for column/resultset mapping.
-
-```scala
-// Low-level API - 1:1 with JDBC
-def getString(index: Int): ResutSetIO[String]
-
-// High-level API - column vector read into product types
-def get[A: Composite](index: Int = 1): ResultSetIO[A]
-
-// ... or aggregate structure
-def list[A: Composite]: ResultSetIO[List[A]]
-```
-
-???
-
-- Composite types are derived automatically for atomic types and products thereof, so tuples, case classes, hlists, that kind of thing.
+# Alrighty.
 
 ---
-# Get your doobie on
-
-Ingredients:
-- `ConnectionIO` constructor via SQL literal.
-- Statement and type-mapping checked at compile-time (soon).
-
-```scala
-// Update returns the affected row count
-tsql"DELETE FROM woozle WHERE blork = 12" // ConnectionIO[Int]
-
-// Select can be mapped to many Scala types, so you specify what you want.
-tsql"SELECT blork FROM woozle".as[Vector[Int]] // ConnectionIO[Vector[Int]]
-
-// Interpolated args are safe and typechecked. Results can be streamed.
-tsql"""
-  SELECT smurf, blork
-    FROM woozle
-   WHERE fnord like $pat
-""".process[Blix] // scalaz.stream.Process[ConnectionIO, Blix]
-
-// we will see more of this
-```
-
-???
-
-- so these constructors encapsulate the most common patterns for interacting with the database and you end up not needing to think abot JDBC at all really.
-- but note that the high and low-level stuff isn't really a stratification; the types are all the same and the only difference is in which constructors you use. So you can compose high and low-level stuff together directly.
-
----
-# Get your doobie on
-
-Ingredients:
-- Default interpreters into Kleisli arrows for any IO-like monad.
-- Just in case:
-  - `Kleisli[F[_], E, A]` is just a wrapper for `E => F[A]`
-  - `F ~> G` defines `F[A] => G[A]` for all `A`.
-
-```scala
-// Interpreter for Op type
-def interpK[M[_]: Monad: Catchable: Capture]
-  : CallableStatementOp ~> Kleisli[M, CallableStatement, ?]
-
-// Which via Free.foldMap gives us
-def transK[M[_]: Monad: Catchable: Capture]
-  : CallableStatementIO ~> Kleisli[M, CallableStatement, ?]
-
-// Or if we have the JDBC type at hand
-def trans[M[_]: Monad: Catchable: Capture](c: CallableStatement)
-  : CallableStatementIO ~> M
-
-// (for all 16 algebras)
-```
-
-???
-
-- Just in case: ... ; I don't expect you to absorb that but it might help if you review the slides later.
-- So the last one lets you use a doobie program to manipulate a JDBC resource that you already have. So this lets you integrate with existing code, which isn't always possible with other database libraries.
-
----
-# Get your doobie on
-
-Ingredients:
-- Conveniences for `ConnectionIO`, which is the top-level effect type.
-
-```scala
-// Abastract over connection pools, data sources, and so on.
-trait Transactor[M[_]] {
-  def trans: ConnectionIO ~> M
-  def transP: Process[ConnectionIO, ?] ~> Process[M, ?]
-}
-
-// Syntax for discharging ConnectionIO
-val xa: Transactor[IO] = ...
-val cw: ConnectionIO[Woozle] = ...
-
-cw.transact(xa) // IO[Woozle] - doobie types are gone
-```
-
-???
-
-- And there's some convenience machinery to abstract over connection pools and data sources, and syntax to let you interpret a `ConnectionIO` into something you can run.
-- That's all I have time for right now, but I'll link to some resources at the end.
-- ok *now* let's do some SQL
-
----
-
 
 # Insert a Tree
 
@@ -1432,6 +1232,8 @@ io.unsafePerformIO
 
 # And now read it back.
 
+Construct a program to read a `ProfF` whose students are `Int` ... ?
+
 ```tut:silent
 def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   for {
@@ -1441,15 +1243,15 @@ def readNode(id: Int): ConnectionIO[ProfF[Int]] =
 ```
 
 ???
-- Here's a method that constructs a program to compute a `ProfF[Inf]` ... no what does that mean? It's a `ProfF` whose children are database ids. So instead of object references we have database references.
-- I think this is a really nice consequence of this encoding; sometimes you want the whole structure and sometimes you just want a "local" hunk, and we get both with the same data type.
+
+- ok so what does this mean?
 - I should acknowledge that this is a very inefficient way to do this; it would be much faster to read the whole thing into memory and assemble the tree locally, but this is easier to follow and ends up being a better example.
-- So now that we have a way to read a slice with database references, how do we assemble this into a tree?
 
 ---
 
-
 # And now read it back.
+
+Construct a program to read a `ProfF` whose students are database ids.
 
 ```tut:silent
 def readNode(id: Int): ConnectionIO[ProfF[Int]] =
@@ -1457,7 +1259,91 @@ def readNode(id: Int): ConnectionIO[ProfF[Int]] =
     d  <- tsql"SELECT name, year FROM prof WHERE id = $id".unique[(String, Int)]
     ss <- tsql"SELECT id FROM prof WHERE parent = $id".as[List[Int]]
   } yield ProfF(d._1, d._2, ss)
+```
 
+Read two layers deep, then stop at ids.
+
+```tut:silent
+def readNode2(id: Int): ConnectionIO[ProfF[ProfF[Int]]] =
+  readNode(id).flatMap(_.traverse(readNode))
+```
+
+---
+
+# And now read it back.
+
+Construct a program to read a `ProfF` whose students are database ids.
+
+```tut:silent
+def readNode(id: Int): ConnectionIO[ProfF[Int]] =
+  for {
+    d  <- tsql"SELECT name, year FROM prof WHERE id = $id".unique[(String, Int)]
+    ss <- tsql"SELECT id FROM prof WHERE parent = $id".as[List[Int]]
+  } yield ProfF(d._1, d._2, ss)
+```
+
+Read two layers deep, then stop at ids.
+
+```tut:silent
+def readNode2(id: Int): ConnectionIO[ProfF[ProfF[Int]]] =
+  readNode(id).flatMap(_.traverse(readNode))
+```
+
+Three, why not?
+
+```tut:silent
+def readNode3(id: Int): ConnectionIO[ProfF[ProfF[ProfF[Int]]]] =
+  readNode(id).flatMap(_.traverse(readNode2))
+```
+
+
+---
+
+# And now read it back.
+
+Construct a program to read a `ProfF` whose students are database ids.
+
+```tut:silent
+def readNode(id: Int): ConnectionIO[ProfF[Int]] =
+  for {
+    d  <- tsql"SELECT name, year FROM prof WHERE id = $id".unique[(String, Int)]
+    ss <- tsql"SELECT id FROM prof WHERE parent = $id".as[List[Int]]
+  } yield ProfF(d._1, d._2, ss)
+```
+
+Read three layers and then stop at a *program* to read the next three layers.
+
+```tut:silent
+type Three[A] = ConnectionIO[ProfF[ProfF[ProfF[A]]]]
+
+def readK(id: Int): Fix[Three] =
+  Fix[Three](readNode3(id).map(_.map(_.map(_.map(readK))))) // urk!
+```
+
+???
+
+- We can write a typeclass that's indexed by a natural number representing the depth, so we're not fixed at two or three or whatever.
+- But what we really want to do here is read the whole thing, so let's get back to that.
+
+
+---
+
+
+# And now read it back.
+
+Construct a program to read a `ProfF` whose students are database ids.
+
+```tut:silent
+def readNode(id: Int): ConnectionIO[ProfF[Int]] =
+  for {
+    d  <- tsql"SELECT name, year FROM prof WHERE id = $id".unique[(String, Int)]
+    ss <- tsql"SELECT id FROM prof WHERE parent = $id".as[List[Int]]
+  } yield ProfF(d._1, d._2, ss)
+```
+
+Construct a program to read a `ProfF` tree *annotated* with database ids.
+
+```tut:silent
 def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
   readNode(id).flatMap { pi =>
     pi.map(readTree)      // ProfF[ConnectionIO[Cofree[ProfF, Int]]]
@@ -1474,13 +1360,19 @@ def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
 
 # And now read it back.
 
+Construct a program to read a `ProfF` whose students are database ids.
+
 ```tut:silent
 def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   for {
     d  <- tsql"SELECT name, year FROM prof WHERE id = $id".unique[(String, Int)]
     ss <- tsql"SELECT id FROM prof WHERE parent = $id".as[List[Int]]
   } yield ProfF(d._1, d._2, ss)
+```
 
+Construct a program to read a `ProfF` tree *annotated* with database ids.
+
+```tut:silent
 def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
   readNode(id).flatMap { pi =>
     pi.traverse(readTree)
@@ -1495,40 +1387,45 @@ def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
 
 # And now read it back.
 
+Construct a program to read a `ProfF` whose students are database ids.
+
 ```tut:silent
 def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   for {
     d  <- tsql"SELECT name, year FROM prof WHERE id = $id".unique[(String, Int)]
     ss <- tsql"SELECT id FROM prof WHERE parent = $id".as[List[Int]]
   } yield ProfF(d._1, d._2, ss)
+```
 
+Construct a program to read a `ProfF` tree *annotated* with database ids.
+
+```tut:silent
 def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
   readNode(id).flatMap(_.traverse(readTree).map(Cofree(id, _)))
 ```
 
 ???
 - Ok so I'd like to take a minute to look at the `readTree` method more closely and see if we can generalize it.
-
----
-
-# (another digression)
-
-```tut:silent
-// our original method for reading a tree
-def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
-  readNode(id).flatMap(_.traverse(readTree).map(Cofree(id, _)))
-```
-
-???
 - Let's factor out the call to `readNode`.
 
 
 ---
 
-# (another digression)
+# And now read it back.
+
+Construct a program to read a `ProfF` whose students are database ids.
 
 ```tut:silent
-// factor out the function we're calling
+def readNode(id: Int): ConnectionIO[ProfF[Int]] =
+  for {
+    d  <- tsql"SELECT name, year FROM prof WHERE id = $id".unique[(String, Int)]
+    ss <- tsql"SELECT id FROM prof WHERE parent = $id".as[List[Int]]
+  } yield ProfF(d._1, d._2, ss)
+```
+
+Construct a program to read a `ProfF` tree *annotated* with database ids.
+
+```tut:silent
 def readTree(id: Int)(f: Int => ConnectionIO[ProfF[Int]]): ConnectionIO[Cofree[ProfF, Int]] =
   f(id).flatMap(_.traverse(readTree(_)(f)).map(Cofree(id, _)))
 ```
@@ -1539,10 +1436,21 @@ def readTree(id: Int)(f: Int => ConnectionIO[ProfF[Int]]): ConnectionIO[Cofree[P
 
 ---
 
-# (another digression)
+# And now read it back.
+
+Construct a program to read a `ProfF` whose students are database ids.
 
 ```tut:silent
-// factor out the monad
+def readNode(id: Int): ConnectionIO[ProfF[Int]] =
+  for {
+    d  <- tsql"SELECT name, year FROM prof WHERE id = $id".unique[(String, Int)]
+    ss <- tsql"SELECT id FROM prof WHERE parent = $id".as[List[Int]]
+  } yield ProfF(d._1, d._2, ss)
+```
+
+Construct a program to read a `ProfF` tree *annotated* with database ids.
+
+```tut:silent
 def readTree[M[_]: Monad](id: Int)(f: Int => M[ProfF[Int]]): M[Cofree[ProfF, Int]] =
   f(id).flatMap(_.traverse(readTree(_)(f)).map(Cofree(id, _)))
 ```
@@ -1553,10 +1461,22 @@ def readTree[M[_]: Monad](id: Int)(f: Int => M[ProfF[Int]]): M[Cofree[ProfF, Int
 
 ---
 
-# (another digression)
+# And now read it back.
+
+Construct a program to read a `ProfF` whose students are database ids.
 
 ```tut:silent
-// factor out the traversable functor
+def readNode(id: Int): ConnectionIO[ProfF[Int]] =
+  for {
+    d  <- tsql"SELECT name, year FROM prof WHERE id = $id".unique[(String, Int)]
+    ss <- tsql"SELECT id FROM prof WHERE parent = $id".as[List[Int]]
+  } yield ProfF(d._1, d._2, ss)
+```
+
+Construct a program to read a `ProfF` tree *annotated* with database ids.
+
+
+```tut:silent
 def readTree[M[_]: Monad, F[_]: Traverse](id: Int)(f: Int => M[F[Int]]): M[Cofree[F, Int]] =
   f(id).flatMap(_.traverse(readTree(_)(f)).map(Cofree(id, _)))
 ```
@@ -1567,10 +1487,21 @@ def readTree[M[_]: Monad, F[_]: Traverse](id: Int)(f: Int => M[F[Int]]): M[Cofre
 
 ---
 
-# (another digression)
+# And now read it back.
+
+Construct a program to read a `ProfF` whose students are database ids.
 
 ```tut:silent
-// factor out the Int
+def readNode(id: Int): ConnectionIO[ProfF[Int]] =
+  for {
+    d  <- tsql"SELECT name, year FROM prof WHERE id = $id".unique[(String, Int)]
+    ss <- tsql"SELECT id FROM prof WHERE parent = $id".as[List[Int]]
+  } yield ProfF(d._1, d._2, ss)
+```
+
+Construct a program to read a `ProfF` tree *annotated* with database ids.
+
+```tut:silent
 def readTree[M[_]: Monad, F[_]: Traverse, A](a: A)(f: A => M[F[A]]): M[Cofree[F, A]] =
   f(a).flatMap(_.traverse(readTree(_)(f)).map(Cofree(a, _)))
 ```
@@ -1580,10 +1511,21 @@ def readTree[M[_]: Monad, F[_]: Traverse, A](a: A)(f: A => M[F[A]]): M[Cofree[F,
 
 ---
 
-# (another digression)
+# And now read it back.
+
+Construct a program to read a `ProfF` whose students are database ids.
 
 ```tut:silent
-// we now have a generic monadic unfold into cofree
+def readNode(id: Int): ConnectionIO[ProfF[Int]] =
+  for {
+    d  <- tsql"SELECT name, year FROM prof WHERE id = $id".unique[(String, Int)]
+    ss <- tsql"SELECT id FROM prof WHERE parent = $id".as[List[Int]]
+  } yield ProfF(d._1, d._2, ss)
+```
+
+Construct a program to read a `ProfF` tree *annotated* with database ids.
+
+```tut:silent
 def unfoldCM[M[_]: Monad, F[_]: Traverse, A](a: A)(f: A => M[F[A]]): M[Cofree[F, A]] =
   f(a).flatMap(_.traverse(unfoldCM(_)(f)).map(Cofree(a, _)))
 ```
@@ -1594,34 +1536,50 @@ def unfoldCM[M[_]: Monad, F[_]: Traverse, A](a: A)(f: A => M[F[A]]): M[Cofree[F,
 - And what it gives back is a Cofree annotated with the key values.
 - And does this method exist in scalaz already? NO! The non-monadic version does but not this one. It's an oversight.
 
+
+
+- and I want to point out it's worth doing this kind of thing **even if you're only calling it once** because the more polymorphic your code is, the fewer ways there are to write it because you have fewer operations available. So that means there are fewer ways to write it wrong. And in fact sometimes if it typechecks it has to be correct because there's only one way to do it.
+- so in any case, with this method our `readTree` method is trivial.
+
+
 ---
 
-# (another digression)
+# And now read it back.
+
+Construct a program to read a `ProfF` whose students are database ids.
 
 ```tut:silent
-// we now have a generic monadic unfold into cofree
+def readNode(id: Int): ConnectionIO[ProfF[Int]] =
+  for {
+    d  <- tsql"SELECT name, year FROM prof WHERE id = $id".unique[(String, Int)]
+    ss <- tsql"SELECT id FROM prof WHERE parent = $id".as[List[Int]]
+  } yield ProfF(d._1, d._2, ss)
+```
+
+Construct a program to read a `ProfF` tree *annotated* with database ids.
+
+```tut:silent
 def unfoldCM[M[_]: Monad, F[_]: Traverse, A](a: A)(f: A => M[F[A]]): M[Cofree[F, A]] =
   f(a).flatMap(_.traverse(unfoldCM(_)(f)).map(Cofree(a, _)))
 
-// and we can define readTree in terms of it
 def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
   unfoldCM(id)(readNode)
 ```
 
 ???
 
-- so in any case, with this method our `readTree` method is trivial.
-- and I want to point out it's worth doing this **even if you're only calling it once** because the more polymorphic your code is, the fewer ways there are to write it because you have fewer operations available. So that means there are fewer ways to write it wrong. And in fact sometimes if it typechecks it has to be correct because there's only one way to do it.
 - But does it work?
 
 ---
 
-# Do it work?
+# Does it work?
 
-Let's read Hilbert's sub-tree ... TODO
+Let's read Hilbert's sub-tree ... URGH, make this better.
 
 ```tut
-val io = (tsql"select id from prof where name like '%Hilbert%'".as[List[Int]].map(_.head) >>= readTree).transact(xa).flatMap(c => ioDrawCofree(c))
+val hilbert = tsql"select max(id) from prof where name like '%Hilbert'".unique[Int]
+
+val io = (hilbert flatMap readTree).transact(xa).flatMap(ioDrawCofree(_))
 io.unsafePerformIO
 ```
 
@@ -1667,7 +1625,7 @@ I will tweet a link to slides and code (not up yet, sorry).
 
 Presentations, Videos, Doc at `tpolecat/doobie` on GitHub
 
-Interactive Awesomeness at `scala-exercises.org` (!!!)
+Online Exercises at `scala-exercises.org` (!)
 
 
 

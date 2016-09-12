@@ -126,6 +126,19 @@ object cofree extends Extras with SafeApp {
       kids <- tsql"SELECT id FROM prof_node WHERE parent = $id".as[List[Int]]
     } yield ProfF(data._1, data._2, data._3, kids)
 
+  /** Read two levels. */
+  def readFlat2(id: Int): ConnectionIO[ProfF[ProfF[Int]]] =
+    readFlat(id).flatMap(_.traverse(readFlat))
+
+  /** Read three levels. */
+  def readFlat3(id: Int): ConnectionIO[ProfF[ProfF[ProfF[Int]]]] =
+    readFlat(id).flatMap(_.traverse(readFlat2))
+
+  /** Read three layers and then stop at a program to read the next three. */
+  type Three[A] = ConnectionIO[ProfF[ProfF[ProfF[A]]]]
+  def readK(id: Int): Fix[Three] =
+    Fix[Three](readFlat3(id).map(_.map(_.map(_.map(readK)))))
+
   /** Monadic cofree corecursion. */
   def unfoldCM[M[_]: Monad, F[_]: Traverse, A](id: A)(f: A => M[F[A]]): M[Cofree[F, A]] =
     f(id).flatMap(_.traverse(unfoldCM(_)(f)).map(Cofree(id, _)))
