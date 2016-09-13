@@ -1,6 +1,6 @@
 import atto._, Atto._, atto.compat.scalaz._
 import scalaz._, Scalaz.{ char => _, _ }, scalaz.effect._
-
+import shapeless.Nat
 import doobie.imports._
 import doobie.contrib.postgresql.pgtypes._
 
@@ -133,6 +133,12 @@ object cofree extends Extras with SafeApp {
   /** Read three levels. */
   def readFlat3(id: Int): ConnectionIO[ProfF[ProfF[ProfF[Int]]]] =
     readFlat(id).flatMap(_.traverse(readFlat2))
+
+  /** Read any number of levels (!) */
+  def genReadFlat(id: Int, n: Nat)(
+    implicit c: Corecur[ProfF, n.N]
+  ): ConnectionIO[c.Out[Int]] =
+    c.unfoldM(id)(readFlat)
 
   /** Read three layers and then stop at a program to read the next three. */
   type Three[A] = ConnectionIO[ProfF[ProfF[ProfF[A]]]]
