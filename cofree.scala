@@ -7,10 +7,13 @@ import doobie.contrib.postgresql.pgtypes._
 import doobie.tsql._
 import doobie.tsql.postgres._
 
-/** Companion code for the talk "Fun and Games with Fix, Cofree, and Doobie". */
+/**
+ * Companion code for the talk "Database Programming with Fixpoint Types". See the README for
+ * information on setting up the test database.
+ */
 object cofree extends Extras with SafeApp {
 
-  /** Fixpoint type. */
+  /** Fixpoint for type constructor `F`. */
   case class Fix[F[_]](unfix: F[Fix[F]])
 
   /** A data type for professors and their Ph.D. students. */
@@ -100,7 +103,7 @@ object cofree extends Extras with SafeApp {
   /// INSERT
   ///
 
-  /** Insert a node with the given parent, disregarding children. */
+  /** Insert a node with the given parent, disregarding children, yielding the generated Id. */
   def insertNode(parent: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
     tsql"""
       INSERT INTO prof_node (parent, name, uni, year)
@@ -108,7 +111,10 @@ object cofree extends Extras with SafeApp {
       RETURNING id
     """.unique[Int]
 
-  /** Insert a tree rooted at `p` with an optional parent. */
+  /**
+   * Insert a tree rooted at `p` with an optional parent, yielding an equivalent tree annotated
+   * with generated Ids.
+   */
   def insertTree(fp: Fix[ProfF], parent: Option[Int] = None): ConnectionIO[Cofree[ProfF, Int]] =
     for {
       h <- insertNode(parent, fp.unfix)
@@ -126,17 +132,17 @@ object cofree extends Extras with SafeApp {
       kids <- tsql"SELECT id FROM prof_node WHERE parent = $id".as[List[Int]]
     } yield ProfF(data._1, data._2, data._3, kids)
 
-  /** Read two levels. */
+  /** Read two levels, then stop at Ids. */
   def readFlat2(id: Int): ConnectionIO[ProfF[ProfF[Int]]] =
     readFlat(id).flatMap(_.traverse(readFlat))
 
-  /** Read three levels. */
+    /** Read three levels, then stop at Ids. */
   def readFlat3(id: Int): ConnectionIO[ProfF[ProfF[ProfF[Int]]]] =
     readFlat(id).flatMap(_.traverse(readFlat2))
 
-  /** Read any number of levels (!) */
+  /** Read any number of levels. See `Corecur.scala`. */
   def genReadFlat(id: Int, n: Nat)(
-    implicit c: Corecur[ProfF, n.N]
+    implicit c: CorecurM[ProfF, n.N]
   ): ConnectionIO[c.Out[Int]] =
     c.unfoldM(id)(readFlat)
 
@@ -157,10 +163,11 @@ object cofree extends Extras with SafeApp {
   /// READ AGAIN, with fancy SQL
   ///
 
-  /** And the non-monadic version, for reference. */
+  /** Cofree corecursion (not-monadic, for reference). */
   def unfoldC[F[_]: Functor, A](id: A)(f: A => F[A]): Cofree[F, A] =
     Cofree(id, f(id).map(unfoldC(_)(f)))
 
+  /** Read an id-annotated tree all at once and assemble it in memory. */
   def read2(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
     tsql"""
       WITH RECURSIVE rec(id, parent, name, uni, year, students) AS(
@@ -175,10 +182,10 @@ object cofree extends Extras with SafeApp {
   /// ENTRY POINT
   ///
 
-  /** A transactor abstracts over connection pools and io-effect types. */
+  /** A transactor abstracts over connection pools and effect types. */
   val xa = DriverManagerTransactor[IO](
     "org.postgresql.Driver",// driver
-    "jdbc:postgresql:prof", // in-memory database
+    "jdbc:postgresql:prof", // database
     "postgres", ""          // user, password
   )
 
@@ -195,13 +202,13 @@ object cofree extends Extras with SafeApp {
 
         // insert and draw
         t <- insertTree(p)
-        // _ <- draw(t)
+        _ <- draw(t)
 
         // Read back and draw
         t <- read(t.head)
-        // _ <- draw(t)
+        _ <- draw(t)
 
-        // Again
+        // Again, all at once
         t <- read2(t.head)
         _ <- draw(t)
 

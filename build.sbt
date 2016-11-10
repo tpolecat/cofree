@@ -18,8 +18,8 @@ libraryDependencies ++= Seq(
   "org.tpolecat" %% "doobie-contrib-postgresql" % "0.3.0",
   "org.tpolecat" %% "doobie-tsql-core"          % "0.1-SNAPSHOT",
   "org.tpolecat" %% "doobie-tsql-postgres"      % "0.1-SNAPSHOT",
-  "org.tpolecat" %% "atto-core"                 % "0.5.0-SNAPSHOT",
-  "org.tpolecat" %% "atto-compat-scalaz72"      % "0.5.0-SNAPSHOT"
+  "org.tpolecat" %% "atto-core"                 % "0.5.1",
+  "org.tpolecat" %% "atto-compat-scalaz72"      % "0.5.1"
 )
 
 addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.7.1")
@@ -34,10 +34,3 @@ initialCommands := """
   |import doobie.contrib.postgresql.pgtypes._
   |import cofree._
   """.stripMargin.trim
-
-scalacOptions ++= Seq(
-  "-Xmacro-settings:doobie.driver=org.postgresql.Driver",
-  "-Xmacro-settings:doobie.connect=jdbc:postgresql:prof",
-  "-Xmacro-settings:doobie.user=postgres",
-  "-Xmacro-settings:doobie.password="
-)
