@@ -421,7 +421,7 @@ class: center, middle
 
 ### tpolecat's law of mistaken invention:
 
-## _"Anything I invent that is sufficiently polymorphic and plausibly useful probably already exists in scalaz."_
+## _"Anything I invent that is sufficiently polymorphic and plausibly useful is probably already a thing."_
 
 ???
 
@@ -450,7 +450,7 @@ case class Cofree[F[_], A](head: A, tail: F[Cofree[F, A]])
 ???
 
 - the first one is called `Fix` and it gives us this fixpoint for any `F`. It lets us write down the infinite type in a finite way.
-- the second one is called `Cofree` and it does the same thing but associates an arbitrary annotation with each value. This one exists in scalaz and cats. `Fix` doesn't, I don't know.
+- the second one is called `Cofree` and it does the same thing but associates an arbitrary annotation with each value. If you saw John's talk yesterday you will have an idea of how awesome this type is. This one exists in scalaz and cats. `Fix` doesn't, I don't know.
 - ... and while we're at it I'll mention another data type that's related.
 
 ---
@@ -500,7 +500,7 @@ case class Free[F[_], A](resume: A \/ F[Free[F, A]])
 
 ???
 
-- Right, so this is `Free`. In the same way you think of cofree as a structure with labels at each node, free is a structure with labels at the leaves.
+- Right, so this is `Free`. So cofree is a structure with labels at each node, free is a structure with labels at the leaves.
 - `Free` is commonly called the free *monad* because it's a monad if `F` is a functor, add `Cofree` is a *comonad* if `F` is a functor.
 
 - It's worth noting that the implementations in cats and scalaz are more complicated than what we have here, because to strictness and stack safety; you want to be able to define free/cofree structures that are very large (or even infinite) so they need to be lazt. And then because they can be arbitrarily big you need a way to traverse them without running out of stack space. So that's the source of complication. In Haskell they're defined just like this. They're both one-liners. Like, half a line.
@@ -513,7 +513,7 @@ case class Free[F[_], A](resume: A \/ F[Free[F, A]])
   - So the first is that if we have a `Fix` we can always get an `F` out by calling `.unfix`, and we can do that with `Cofree` by calling `.tail`. The general name for this operation is `project` and data types that do this are called *recursive* types.
   - And note that we can't do it with `Free` because you might not have an `F`; you might have an `A`. But you can always go the *other* way. If you have the `F` you can construct a `Free`. Same with `Fix`. But you can't do this with `Cofree` because you also need an `A`. So this operation (the dual) is called `embed` and data types with ths behavior are *corecursive* types.
   - So `Cofree` is a recursive type and `Free` is a corecursive type, and `Fix` is both.
-  - And on this basis you can introduce abstractions for recursive and corecursive types that give you tons and tons of operations for free. There's a library called Matryoskha that does this, and it's an amazing library. ...
+  - And on this basis you can introduce abstractions for recursive and corecursive types that give you tons and tons of operations for free.
   - So some of the things I'm going to derive later in the talk are free if you use Matryoshka.
 
 - So, the second thing I want to point out is that `Free` and `Cofree` are also fixpoint types. We can do the same trick we did with `Prof` and factor out the recursion.
@@ -1121,11 +1121,11 @@ def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
 Construct a program to insert a `Fix[ProfF]` and return an equivalent `Cofree` annotated with generated ids.
 
 ```tut:silent
-def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]] =
+def insertTree(op: Option[Int], fp: Fix[ProfF]): ConnectionIO[Cofree[ProfF, Int]] =
   for {
     h <- insertNode(op, fp.unfix)       // ConnectionIO[Int]
     t <- fp.unfix                       // ProfF[Fix[ProfF]]
-           .map(insertTree(_, Some(h))) // ProfF[ConnectionIO[Cofree[ProfF, Int]]]
+           .map(insertTree(Some(h), _)) // ProfF[ConnectionIO[Cofree[ProfF, Int]]]
            .sequence                    // ConnectionIO[ProfF[Cofree[ProfF, Int]]]
   } yield Cofree(h, t)
 ```
@@ -1155,11 +1155,11 @@ def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
 Construct a program to insert a `Fix[ProfF]` and return an equivalent `Cofree` annotated with generated ids.
 
 ```tut:silent
-def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]] =
+def insertTree(op: Option[Int], fp: Fix[ProfF]): ConnectionIO[Cofree[ProfF, Int]] =
   for {
     h <- insertNode(op, fp.unfix)
     t <- fp.unfix
-           .traverse(insertTree(_, Some(h))) // same as map + sequence
+           .traverse(insertTree(Some(h), _)) // same as map + sequence
   } yield Cofree(h, t)
 ```
 
@@ -1197,10 +1197,10 @@ def insertNode(op: Option[Int], p: ProfF[_]): ConnectionIO[Int] =
 Construct a program to insert a `Fix[ProfF]` and return an equivalent `Cofree` annotated with generated ids.
 
 ```tut:silent
-def insertTree(fp: Fix[ProfF], op: Option[Int]): ConnectionIO[Cofree[ProfF, Int]] =
+def insertTree(op: Option[Int], fp: Fix[ProfF]): ConnectionIO[Cofree[ProfF, Int]] =
   for {
     h <- insertNode(op, fp.unfix)
-    t <- fp.unfix.traverse(insertTree(_, Some(h)))
+    t <- fp.unfix.traverse(insertTree(Some(h), _))
   } yield Cofree(h, t)
 ```
 
@@ -1235,7 +1235,7 @@ def ioDrawCofree[F[_]: Traverse, A](fa: Cofree[F, A], indent: Int = 0): IO[Unit]
 
 ```tut
 val p = prof(0).parseOnly(data).option.get // yolo
-val io = insertTree(p, None).transact(xa).flatMap(c => ioDrawCofree(c))
+val io = insertTree(None, p).transact(xa).flatMap(c => ioDrawCofree(c))
 io.unsafePerformIO
 ```
 
@@ -1552,13 +1552,12 @@ def unfoldCM[M[_]: Monad, F[_]: Traverse, A](a: A)(f: A => M[F[A]]): M[Cofree[F,
 
 ???
 
-- This is monadic cofree corecursion; it takes a seed value and feeds it into a function that generates an F in some context, the traverses it to expand the `A`'s in the `F`, forever, or until there are no more `A`s; in this case it means we're at the leaves of the tree.
+- This is the effectful unfold for Cofree. It takes a seed value and feeds it into this function that generates an F in some context, the traverses it to expand the `A`'s in the `F`, forever, or until there are no more `A`s; in this case it means we're at the leaves of the tree.
 - And what it gives back is a Cofree annotated with the key values.
-- And does this method exist in scalaz already? NO! The non-monadic version does but not this one. It's an oversight.
+- You would get entirely for free if you were using Matryoshka.
 
 
-
-- and I want to point out it's worth doing this kind of thing **even if you're only calling it once** because the more polymorphic your code is, the fewer ways there are to write it because you have fewer operations available. So that means there are fewer ways to write it wrong. And in fact sometimes if it typechecks it has to be correct because there's only one way to do it.
+- and I want to point out that this kind of exercise is worth doing **even if you're only calling it once** because the more polymorphic your code is, the fewer ways there are to write it because you have fewer operations available. So that means there are fewer ways to write it wrong. And in fact sometimes if it typechecks it has to be correct because there's only one way to do it.
 - so in any case, with this method our `readTree` method is trivial.
 
 
