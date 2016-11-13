@@ -159,6 +159,13 @@ object cofree extends Extras with SafeApp {
   def read(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
     unfoldCM(id)(readFlat)
 
+  /** Read a tree that stops at even ids. */
+  def readEven(id: Int): ConnectionIO[Free[ProfF, Int]] =
+    if (id % 2 == 0) Free.pure(id).point[ConnectionIO]
+    else readFlat(id).flatMap { i =>
+      i.traverseU(readEven).map(Free.roll)
+    }
+
   ///
   /// READ AGAIN, with fancy SQL
   ///

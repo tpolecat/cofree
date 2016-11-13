@@ -42,9 +42,9 @@ Rob Norris • `@tpolecat` • Gemini Observatory
 
 ???
 
-- I'm Rob, thanks Alexy for inviting me to speak
+- Hi, I'm Rob.
 - I write software for big telescopes (in Scala) and I also work on some open-source projects including a few that we'll talk about today.
-- So before we get started, if you don't mind admitting it, how many of you have used scalaz or cats?
+- So before we get started, if you don't mind admitting it, how many of you have used scalaz or cats? Were any of you in John's Cofree talk yesterday? Greg's talk on Matryoshka?
 - So today I want to talk about some odds and ends that I think are interesting, and we'll see if you find them interesting too.
 
 ---
@@ -61,7 +61,7 @@ Rob Norris • `@tpolecat` • Gemini Observatory
 1. --- These types seem to be pretty well known in the Haskell community but not so much among Scala programmers, and they're interesting and worth knowing about.
 2. ---
 3. --- so, this is something I mention from time to time when I give talks and people ask me to say more about it, so I'll try to do that as well.
-4. --- Recursion is always mind-blowing at first. Everybody struggles with recursive functions and inductive data types at first, and today we're going to talk about self-referential types, which might be hard to grasp at first. This is ok. I'm going to try to approach it very gradually. If it ends up being too slow for you, I apologize; if it's too fast I also apologize. But please stop me if you have questions.
+4. --- Recursion is always mind-blowing at first. Everybody struggles with recursive functions and inductive data types at first, and today we're going to talk about self-referential types, which might be hard to grasp at first. This is ok. I'm going to try to approach it very gradually. If it ends up being too slow for you, I apologize; if it's too fast I also apologize. I'm going to try to split the difference and hopefully for most of you it will work out ok.
 
 Ok so let's look at a recursive data type.
 
@@ -155,7 +155,7 @@ CREATE TABLE prof (
 ???
 
 - ...
-- Ok so what's wrong with this representatoin for IDs? (new objects)
+- Ok so what's wrong with this representation for IDs? (new objects)
 - Also going to get rid of the table definition for now.
 
 ---
@@ -234,7 +234,7 @@ type IdProf = (Int, Prof)
 ???
 
 - ... Which defeats the purpose of externalizing the ids … the whole point was to not have to talk about them in the model.
-- Ok so when you have a problem like this where you can't figure out what type to use, sometimes it helps to just make it a parameter. So let's try that.
+- Ok so the leap you have to make here is to say ok I don't know what type goes here, so I'm just going to add a type parameter. And this is the trick. This is the part where it starts getting unfamiliar.
 
 ---
 
@@ -500,23 +500,28 @@ case class Free[F[_], A](resume: A \/ F[Free[F, A]])
 
 ???
 
-- Right, so this is `Free`. So cofree is a structure with labels at each node, free is a structure with labels at the leaves.
+- Right, so this is `Free`. So cofree gives you a structure with labels at each node, free gives you a structure with labels at the leaves.
 - `Free` is commonly called the free *monad* because it's a monad if `F` is a functor, add `Cofree` is a *comonad* if `F` is a functor.
 
-- It's worth noting that the implementations in cats and scalaz are more complicated than what we have here, because to strictness and stack safety; you want to be able to define free/cofree structures that are very large (or even infinite) so they need to be lazt. And then because they can be arbitrarily big you need a way to traverse them without running out of stack space. So that's the source of complication. In Haskell they're defined just like this. They're both one-liners. Like, half a line.
+- It's worth noting that the implementations in cats and scalaz are more complicated than what we have here, for two reasons:
+  - first, you want to be able to define free/cofree structures that are very large (or even infinite) so they need to be lazy.
+  - And then because they can be arbitrarily big you need a way to traverse them without running out of stack space, so you need some special handling to be sure you can do that.
 
-- In any case it's unfortunate because the complexity of the implementation makes them hard to understanc. You have to squint to see it, especially with `Free`.
+- So that's the source of complication. In Haskell they're defined just like this. They're both one-liners. Like, half a line.
+
+- In any case it's unfortunate because the complexity of the implementation makes it hard to understand the fundamental structure.
 - It's a fun and useful exercise to take that totally trivial free monad (for instance) and build it out util you can write a little DSL and interpreter like everyone likes to do these days. It will be finite and stack limited but it'll work. And you will feel awesome.
 
 - Ok, so I want to do a couple more things before we move on.
 
-  - So the first is that if we have a `Fix` we can always get an `F` out by calling `.unfix`, and we can do that with `Cofree` by calling `.tail`. The general name for this operation is `project` and data types that do this are called *recursive* types.
-  - And note that we can't do it with `Free` because you might not have an `F`; you might have an `A`. But you can always go the *other* way. If you have the `F` you can construct a `Free`. Same with `Fix`. But you can't do this with `Cofree` because you also need an `A`. So this operation (the dual) is called `embed` and data types with ths behavior are *corecursive* types.
-  - So `Cofree` is a recursive type and `Free` is a corecursive type, and `Fix` is both.
-  - And on this basis you can introduce abstractions for recursive and corecursive types that give you tons and tons of operations for free.
-  - So some of the things I'm going to derive later in the talk are free if you use Matryoshka.
+  - If we have a Cofree we can always get an F out; we can take a layer off, but we can't do that with Free because there might not be an F in there, it might be an A.
+  - If we an F we can always construct a Free (so we can add a layer) but we can't do that with Cofree because we also need an A. So that makes
+  - And with Fix we can do both of those things.
+  - And on this basis we can introduce abstractions for recursive types like Cofree that can always get smaller, and corecursive types that Free that can always get bigger. And we can get this universe of operations for free by recognizing this distinction, and there's a library called Matryoshka that does this for us.
+  - So if you saw Greg's talk yesterday your brain probably still hurts but you have an idea of the kind of power it provides.
+  - But I'm going to do this stuff from scratc today, so some of the things I'm going to show you are things that you get for free with Matryoshka for free, and I'll try to point those out.
 
-- So, the second thing I want to point out is that `Free` and `Cofree` are also fixpoint types. We can do the same trick we did with `Prof` and factor out the recursion.
+- So, the last thing I want to show you before we move on is that `Free` and `Cofree` are also fixpoint types. We can do the same trick we did with `Prof` and factor out the self-referential part of the data type definition.
 
 ---
 
@@ -548,7 +553,8 @@ type Free[F[_], A] = Fix[FreeF[F, A, ?]]
 
 ???
 
-- So `Fix` is the primitive structure here.
+- So have ...
+- So `Fix` is the primitive structure here, and it's actually one of several primitive fixpoint combinators. But Fix is the only one we'll talk about today.
 - Alright, enough of that.
 - Ok so now that we know about the general types we can define `Prof` and `IdProf` trivially.
 
@@ -1206,7 +1212,7 @@ def insertTree(op: Option[Int], fp: Fix[ProfF]): ConnectionIO[Cofree[ProfF, Int]
 
 ???
 
-- So, this `insertTree` operation can be generalized but the `Option` type makes it a little messy so we're just going to leave it as-is.
+- So, this can be generalized more but we're going to stop here. If you're using Matryoskha you can write this as a coalgebra with no recursive call and use a generalized anamorphism to unfold the cofree.
 
 ---
 
@@ -1316,6 +1322,12 @@ def readNode3(id: Int): ConnectionIO[ProfF[ProfF[ProfF[Int]]]] =
   readNode(id).flatMap(_.traverse(readNode2))
 ```
 
+???
+
+- So the type tells us how far we can go. As we peel away each layer the type gets smaller and then we have to go back to the database.
+- We can generalize this by indexing over a type-level natural number, and there's an implementation in the sample code.
+- But what if we want to read an arbitrary hunk of the graph, where each child is either a dead-end or a node you can step onto?
+
 
 ---
 
@@ -1331,20 +1343,28 @@ def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   } yield ProfF(d._1, d._2, ss)
 ```
 
-Read three layers and then stop at a *program* to read the next three layers.
+An arbitrary sub-graph.
+
+```tut:invisible
+import scalaz.Free
+```
 
 ```tut:silent
-type Three[A] = ConnectionIO[ProfF[ProfF[ProfF[A]]]]
-
-def readK(id: Int): Fix[Three] =
-  Fix[Three](readNode3(id).map(_.map(_.map(_.map(readK))))) // urk!
+/** Read a tree that stops at even ids. */
+def readEven(id: Int): ConnectionIO[Free[ProfF, Int]] = {
+  if (id % 2 == 0) Free.pure(id).point[ConnectionIO]
+  else readNode(id).flatMap { pi =>
+    pi.traverseU(readEven).map(Free.roll)
+  }
+}
 ```
+
 
 ???
 
-- We can write a typeclass that's indexed by a natural number representing the depth, so we're not fixed at two or three or whatever, and that's in the sample code as well.
-- But what we really want to do here is read the whole thing, so let's get back to that.
-
+- Well we can do that. We can read an arbitrary subgraph starting at some place, where each child is either an id or a prof node based on something we decide on the fly. And that type is, surprise, `Free` of `ProfF`. So this method reads a subtree but it stops when it hits an even id. I'm not going to walk through this one but you can look in the sample code.
+- So the point is that we have a lot of ways to manage this level of detail problem.
+- But what we really want to do here is read the whole thing back with id annotations, so let's get back to that.
 
 ---
 
@@ -1361,7 +1381,7 @@ def readNode(id: Int): ConnectionIO[ProfF[Int]] =
   } yield ProfF(d._1, d._2, ss)
 ```
 
-Construct a program to read a `ProfF` tree *annotated* with database ids.
+Construct a program to read a `ProfF` tree annotated with database ids.
 
 ```tut:silent
 def readTree(id: Int): ConnectionIO[Cofree[ProfF, Int]] =
@@ -1554,10 +1574,10 @@ def unfoldCM[M[_]: Monad, F[_]: Traverse, A](a: A)(f: A => M[F[A]]): M[Cofree[F,
 
 - This is the effectful unfold for Cofree. It takes a seed value and feeds it into this function that generates an F in some context, the traverses it to expand the `A`'s in the `F`, forever, or until there are no more `A`s; in this case it means we're at the leaves of the tree.
 - And what it gives back is a Cofree annotated with the key values.
-- You would get entirely for free if you were using Matryoshka.
+- You would get this for free if you were using Matryoshka.
 
 
-- and I want to point out that this kind of exercise is worth doing **even if you're only calling it once** because the more polymorphic your code is, the fewer ways there are to write it because you have fewer operations available. So that means there are fewer ways to write it wrong. And in fact sometimes if it typechecks it has to be correct because there's only one way to do it.
+- So just as a general thing I want to point out that this kind of exercise is worth doing **even if you're only calling it once** because the more polymorphic your code is, the fewer ways there are to write it because you have fewer operations available. So that means there are fewer ways to write it wrong. And in fact sometimes if it typechecks it has to be correct because there's only one way to do it.
 - so in any case, with this method our `readTree` method is trivial.
 
 
